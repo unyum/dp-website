@@ -100,6 +100,30 @@ var JotForm = {
      * @var Boolean
      */
     saving: false,
+
+    /**
+     * Status of fetching pending submission data
+     * @var Boolean
+     */
+    loadingPendingSubmission: false,
+
+    /**
+     * ID of current submission session
+     * @var String
+     */
+    sessionID: null,
+
+    /**
+     * Unique token of current submission session
+     * @var String
+     */
+    submissionToken: null,
+
+    /**
+     * Submission ID for edit mode
+     * @var String
+     */
+    submissionID: null,
     /**
      * Texts used in the form
      * @var Object
@@ -107,6 +131,7 @@ var JotForm = {
     texts: {
         confirmEmail: 'E-mail does not match',
         pleaseWait: 'Please wait...',
+        validateEmail: 'You need to validate this e-mail',
         confirmClearForm: 'Are you sure you want to clear the form',
         lessThan: 'Your score should be less than or equal to',
         incompleteFields: 'There are incomplete required fields. Please complete them.',
@@ -137,10 +162,12 @@ var JotForm = {
         dateLimited: 'This date is unavailable.',
         dateInvalid: 'This date is not valid. The date format is {format}',
         dateInvalidSeparate: 'This date is not valid. Enter a valid {element}.',
+        ageVerificationError: 'You must be older than {minAge} years old to submit this form.',
         multipleFileUploads_typeError: '{file} has invalid extension. Only {extensions} are allowed.',
         multipleFileUploads_sizeError: '{file} is too large, maximum file size is {sizeLimit}.',
         multipleFileUploads_minSizeError: '{file} is too small, minimum file size is {minSizeLimit}.',
         multipleFileUploads_emptyError: '{file} is empty, please select files again without it.',
+        multipleFileUploads_uploadFailed: 'File upload failed, please remove it and upload the file again.',
         multipleFileUploads_onLeave: 'The files are being uploaded, if you leave now the upload will be cancelled.',
         multipleFileUploads_fileLimitError: 'Only {fileLimit} file uploads allowed.',
         generalError: 'There are errors on the form. Please fix them before continuing.',
@@ -156,6 +183,7 @@ var JotForm = {
         ccMissingProduct: 'Please select at least one product.',
         ccMissingDonation: 'Please enter numeric values for donation amount.',
         disallowDecimals: 'Please enter a whole number.',
+        restrictedDomain: 'This domain is not allowed',
         ccDonationMinLimitError: 'Minimum amount is {minAmount} {currency}'
     },
     paymentTexts: {
@@ -171,10 +199,53 @@ var JotForm = {
         totalSubtotal: 'Subtotal',
         taxTax: 'Tax'
     },
-    paymentFields: ['control_stripe', 'control_paymill', 'control_payment', 'control_paypal', 'control_paypalexpress', 'control_paypalpro', 'control_clickbank', 'control_2co', 'control_googleco', 'control_worldpay', 'control_onebip', 'control_authnet', 'control_dwolla', 'control_braintree', 'control_square', 'control_boxpayment', 'control_eway'],
+    validationRegexes: {
+        email: /^\S[a-z0-9\/.!#$%&'*+\/=?\^_`{|}~\-]*(?:\.[a-z0-9!#$%&'*+\/=?\^_`{|}~\-]+)*@(?:[a-z0-9](?:[a-z0-9\-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9\-]*[a-z0-9])$/i,
+        alphanumeric: /^[\u00C0-\u1FFF\u2C00-\uD7FFa-zA-Z0-9\s]+$/,
+        numeric: /^(-?\d+[\.\,]?)+$/,
+        numericDotStart: /^([\.]\d+)+$/,  //accept numbers starting with dot
+        currency: /^-?[\$\£\€]?\d*,?\d*,?\d*(\.\d\d)?¥?$/,
+        alphabetic: /^[\u00C0-\u1FFF\u2C00-\uD7FFa-zA-Z\s]+$/,
+        cyrillic: /^[абвгдеёжзийклмнопрстуфхцчшщьыъэюяАБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЬЫЪЭЮЯ\s]*$/,
+        url: /(http|ftp|https){0,1}:{0,1}[\w\-_]+(\.[\w\-_]+)+([\w\-\.,@?^=%&amp;:/~\+#]*[\w\-\@?^=%&amp;/~\+#])?/
+    },
+    freeEmailAddresses: ['gmail', 'aim', 'outlook', 'hotmail', 'yahoo', 'mail', 'inbox'],
+
+    paymentFields: [
+      'control_2co',
+      'control_authnet',
+      'control_bluepay',
+      'control_bluesnap',
+      'control_boxpayment',
+      'control_braintree',
+      'control_cardconnect',
+      'control_chargify',
+      'control_clickbank',
+      'control_dwolla',
+      'control_echeck',
+      'control_eway',
+      'control_firstdata',
+      'control_googleco',
+      'control_moneris',
+      'control_onebip',
+      'control_pagseguro',
+      'control_payjunction',
+      'control_payment',
+      'control_paymill',
+      'control_paypal',
+      'control_paypalexpress',
+      'control_paypalpro',
+      'control_payu',
+      'control_square',
+      'control_stripe',
+      'control_wepay',
+      'control_worldpay'
+    ],
     isEncrypted : false,
     /* Control to prevent injection of <input name="temp_upload_folder"> more than once. */
     tempUploadFolderInjected: false,
+    disableSubmitButton: false,
+    disableSubmitButtonMessage: '',
     encryptAll  : function(e, callback) {
         e.stop();
 
@@ -190,6 +261,7 @@ var JotForm = {
             'control_braintree',
             'control_dwolla',
             'control_payment',
+            'control_paymentwall',
             'control_square',
             'control_boxpayment',
             'control_eway',
@@ -199,7 +271,14 @@ var JotForm = {
             'control_payjunction',
             'control_worldpayus',
             'control_wepay',
-            'control_chargify'
+            'control_chargify',
+            'control_cardconnect',
+            'control_echeck',
+            'control_bluesnap',
+            'control_payu',
+            'control_pagseguro',
+            'control_moneris'
+
         ];
 
         var sendAsHiddenField = [
@@ -212,6 +291,7 @@ var JotForm = {
             "control_birthdate",
             "control_time",
             "control_scale",
+            "control_rating",
         ];
 
         // payment fields that will submit the form on their own
@@ -231,7 +311,7 @@ var JotForm = {
 
             // Really? Why? Are they assumed empty? - Alp
             //if(JotForm.isVisible(field)) {
-                var fieldLine = field.up('li');
+                var fieldLine = field.up('li.form-line');
                 if (!fieldLine) {
                     return;
                 }
@@ -239,6 +319,7 @@ var JotForm = {
                 var fieldType = fieldLine.readAttribute('data-type');
                 var fieldId = field.id.replace(/[^_]+_(\d+)(.+)?/, '$1');
                 var encryptedFieldName = field.name;
+                var isMultipleSelectionInput = ['checkbox', 'radio'].include(field.type);
 
                 if (selfSubmitFields.indexOf(fieldType) > -1 && JotForm.paymentTotal > 0) {
                     submitFormAfterEncrypt = false;
@@ -254,12 +335,12 @@ var JotForm = {
                     encryptedFieldName = field.name + '_' + field.id.replace(/.+_([0-9]+$)/, '$1');
                 }
                 // no need to encrypt these
-                if (fieldType == 'control_matrix' && ['checkbox', 'radio'].include(field.type)) {
+                if (fieldType == 'control_matrix' && isMultipleSelectionInput) {
                     return;
                 }
 
                 //prevent double encryption (especially of textareas)
-                if (alreadyEncrypted.indexOf(encryptedFieldName) !== -1 && !field.up().hasClassName('form-matrix-values')
+                if ((!isMultipleSelectionInput && alreadyEncrypted.indexOf(encryptedFieldName) !== -1) && (!field.up().hasClassName('form-matrix-values') && !field.up(1).hasClassName('form-matrix-values'))
                     || field.value === undefined || (field.value.length > 300 && field.value.indexOf('==') == field.value.length - 2))
                 {
                     return;
@@ -273,6 +354,7 @@ var JotForm = {
                 }
 
                 var encryptedAnswer = JotEncrypted.encrypt(field.value);
+
                 //add to encrypted list
                 alreadyEncrypted.push(encryptedFieldName);
 
@@ -305,6 +387,11 @@ var JotForm = {
                     JotForm.setQuestionMasking(field, '', maskValue, true);
                 }
             
+                // Change type of numbeer fields to replace filled value with encrypted answer
+                if (field.type === 'number') {
+                    field.type = 'text';
+                }
+
                 field.value = encryptedAnswer;
             //}
         });
@@ -341,7 +428,6 @@ var JotForm = {
                     this.server = d + 'server.php';
                     this.url = d;
                 }
-
             }
         }
     },
@@ -438,8 +524,10 @@ var JotForm = {
 
                 this.noJump = ("nojump" in document.get);
                 this.uniqueID = this.uniqid();
+                this.sessionID = ('session' in document.get) && (document.get.session.length > 0) ? document.get.session : false;
+                this.submissionToken = ('stoken' in document.get) && (document.get.stoken.length > 0) ? document.get.stoken : false;
+                this.submissionID = ('sid' in document.get) && (document.get.sid.length > 0) ? document.get.sid : false;
                 this.handleSavedForm();
-                this.setTitle();
                 this.setHTMLClass();
                 this.getDefaults();
 
@@ -461,6 +549,10 @@ var JotForm = {
 
                 if (this.payment === "braintree") {
                     this.handleBraintree();
+                }
+  
+                if (this.payment === "pagseguro") {
+                  this.handlePagseguro();
                 }
 
                 if (this.payment === "square") {
@@ -492,8 +584,22 @@ var JotForm = {
                     this.handlePaymentSubProducts();
                 }
 
+                if (window.location.hash === "#hw-izmir") {
+                    $(document.body).addClassName('hw-izmir');
+                }
+
                 // If form is hosted in an iframe, calculate the iframe height
                 if (window.parent && window.parent != window) {
+                    var queryString =  document.referrer && document.referrer.split('?')[1] || '';
+
+                    // Disable smart embed on forcing action or iframe embed forms
+                    if(queryString.indexOf('disableSmartEmbed') > -1 || !this.jsForm) {
+                        // Remove smart embed class to prevent applying embed styling
+                        $$('.isSmartEmbed').each(function(el) {
+                            el.removeClassName('isSmartEmbed');
+                        });
+                    }
+                    this.setIFrameDeviceType();
                     this.handleIFrameHeight();
                     // this.removeCover();
 
@@ -507,6 +613,11 @@ var JotForm = {
                             }
                         }, 500);
                     }
+                } else {
+                    // Remove smart embed class to prevent applying embed styling
+                    $$('.isSmartEmbed').each(function(el) {
+                        el.removeClassName('isSmartEmbed');
+                    });
                 }
 
                 // set triggerEvent function for elements
@@ -608,109 +719,6 @@ var JotForm = {
                 // when a form is embedded via a 3rd party app
                 this.additionalActionsFormEmbedded();
 
-                // render JotForm ad
-                if(JotForm.showJotFormLogo) {
-                    if(window.FORM_MODE && window.FORM_MODE == 'cardform') return;
-
-                    var formAll = $$('.form-all')[0];
-                    if(formAll) {
-                        var _formID = $$('input[name="formID"]')[0].value;
-                        var colorScheme = 'orange';
-                        var primaryTextColor = '#f38632';
-                        var secondaryTextColor = '#aaa';
-                        var primaryImgSrc = '//cdn.jotfor.ms/img/jot-logo-orange.png?v3';
-                        var primaryBgColor = '#fff';
-
-                        if(colorScheme === 'white') {
-                          primaryTextColor = '#fff';
-                          secondaryTextColor = '#fff';
-                          primaryImgSrc = '//cdn.jotfor.ms/img/jot-logo-white.png?v2';
-                          primaryBgColor = '#f38632';
-                        }
-
-                        var bannerWrapper = document.createElement('div');
-                        bannerWrapper.className = 'jotform-ad'
-                        bannerWrapper.style.overflow = 'hidden';
-                        bannerWrapper.style.borderTop = '1px solid #eee';
-                        bannerWrapper.style.padding = '0 18px';
-                        bannerWrapper.style.textDecoration = 'none';
-                        bannerWrapper.style.fontFamily = '"Lucida Grande", "Lucida Sans", "Lucida Sans Unicode", sans-serif';
-                        bannerWrapper.style.fontSize = '12px';
-                        bannerWrapper.style.color = secondaryTextColor
-                        bannerWrapper.style.background = primaryBgColor;
-
-                        var bannerImgLink = document.createElement('a');
-                        bannerImgLink.href = 'https://www.jotform.com/?utm_source=formfooter&utm_medium=banner&utm_term=' + _formID + '&utm_content=form_footer_banner&utm_campaign=form_footer_signup_hp';
-                        bannerImgLink.target = '_blank';
-                        bannerImgLink.setText('Powered by');
-                        bannerImgLink.style.lineHeight = '48px';
-                        bannerImgLink.style.float = 'left';
-                        bannerImgLink.style.textDecoration = 'none';
-
-                        var bannerImg = document.createElement('img');
-                        bannerImg.src = primaryImgSrc;
-                        bannerImg.alt = 'JotForm';
-                        bannerImg.style.height = '23px';
-                        bannerImg.style.width = '100px';
-                        bannerImg.style.marginLeft = '3px';
-                        bannerImg.style.marginTop = '-1px';
-                        bannerImg.style.display = 'inline-block';
-                        bannerImg.style.verticalAlign = 'middle';
-                        bannerImg.style.border = 'none';
-                        bannerImgLink.appendChild(bannerImg);
-
-                        bannerTextLink = document.createElement('a');
-                        bannerTextLink.target = '_blank';
-                        bannerTextLink.href = 'https://www.jotform.com/signup?utm_source=formfooter&utm_medium=banner&utm_term=' + _formID + '&utm_content=form_footer_text&utm_campaign=form_footer_signup';
-                        bannerTextLink.style.float = 'right';
-                        bannerTextLink.style.color = primaryTextColor;
-                        bannerTextLink.style.lineHeight = '48px';
-                        bannerTextLink.setText('Create your own form today!');
-
-                        bannerWrapper.appendChild(bannerImgLink);
-                        bannerWrapper.appendChild(bannerTextLink);
-                        formAll.appendChild(bannerWrapper);
-                    }
-                }
-
-                var constructFooterPowered = function(){
-                    var _form = $$('.jotform-form')[0];
-                    var _formID = _form.getAttribute('id');
-
-                    var footerHeightMask = document.createElement('div');
-                    footerHeightMask.className = 'formFooter-heightMask';
-                    var footer = document.createElement('div');
-                    footer.className = 'formFooter';
-                    var logoLink = document.createElement('a');
-                    logoLink.href = 'https://www.jotform.com/signup?utm_source=formfooter&utm_medium=banner&utm_term=' + _formID + '&utm_content=jotform_logo&utm_campaign=powered_by_jotform_signup';
-                    logoLink.target = '_blank';
-                    logoLink.className = 'formFooter-logoLink';
-                    var footerLogo = document.createElement('img');
-                    footerLogo.className = 'formFooter-logo';
-                    footerLogo.src = 'https://cdn.jotfor.ms/assets/img/logo/logo-new@1x.png';
-                    footerLogo.style.height = '44px';
-                    footerLogo.alt = '';
-                    var footerRightSide = document.createElement('div');
-                    footerRightSide.className = 'formFooter-rightSide';
-                    var footerText = document.createElement('span');
-                    footerText.className = 'formFooter-text';
-                    footerText.innerText = "Now create your own JotForm - It's free!";
-                    var footerButton = document.createElement('a');
-                    footerButton.className = 'formFooter-button';
-                    footerButton.href = 'https://www.jotform.com/signup?utm_source=formfooter&utm_medium=banner&utm_term=' + _formID + '&utm_content=jotform_button&utm_campaign=powered_by_jotform_signup';
-                    footerButton.target = '_blank';
-                    footerButton.innerText = 'Create your own JotForm';
-
-                    logoLink.appendChild(footerLogo);
-                    footerRightSide.appendChild(footerText);
-                    footerRightSide.appendChild(footerButton);
-                    footer.appendChild(logoLink);
-                    footer.appendChild(footerRightSide);
-
-                    document.body.appendChild(footerHeightMask);
-                    document.body.appendChild(footer);
-                }
-
                 // old form footer
                 var constructSubmitBanner = function(){
                     var button = document.querySelector('.form-submit-button');
@@ -756,8 +764,22 @@ var JotForm = {
                     }
                 }
 
-                if(JotForm.showJotFormPowered == "old_footer") {
+                if (JotForm.showHIPAABadge) {
+                    var button = document.querySelector('.form-submit-button');
+                    var buttonWrapper = button.parentNode;
+                    var banner = new Element('img', {
+                        src: 'https://cdn.jotfor.ms/assets/img/uncategorized/hipaa_badge.png',
+                        style: 'display:block;width:160px;',
+                    });
+                    buttonWrapper.appendChild(banner);
+                } else if (JotForm.showJotFormPowered == "old_footer") {
                     constructSubmitBanner();
+                }
+
+                if (JotForm.hipaa) {
+                    var form = document.querySelector('.jotform-form');
+                    var fileServer = new Element('input', { id: 'file_server', type: 'hidden', name: 'file_server', value: 'hipaa-app1' });
+                    form.appendChild(fileServer);
                 }
             } catch (err) {
                 JotForm.error(err);
@@ -773,6 +795,34 @@ var JotForm = {
         }
     },
 
+    /**
+     * Checks browser or device agent
+     */
+    browserIs: {
+        userAgent: 'navigator' in window && 'userAgent' in navigator && navigator.userAgent.toLowerCase() || '',
+        vendor: 'navigator' in window && 'vendor' in navigator && navigator.vendor.toLowerCase() || '',
+        appVersion: 'navigator' in window && 'appVersion' in navigator && navigator.appVersion.toLowerCase() || '',
+        chrome: function(){return /chrome|chromium/i.test(this.userAgent) && /google inc/.test(this.vendor)},
+        firefox: function(){return /firefox/i.test(this.userAgent)},
+        ie: function(){return /msie/i.test(this.userAgent) || "ActiveXObject" in window || /edge\//i.test(this.userAgent)},
+        safari: function(){return /safari/i.test(this.userAgent) && /apple computer/i.test(this.vendor)},
+        operabrowser: function(){return this.userAgent.indexOf("Opera") > -1},
+        iphone: function(){return /iphone/i.test(this.userAgent) || /iphone/i.test(this.appVersion)},
+        ipad: function(){return /ipad/i.test(this.userAgent) || /ipad/i.test(this.appVersion)},
+        ios: function(){return this.iphone() || this.ipad()},
+        android: function(){return /android/i.test(this.userAgent)},
+        androidPhone: function(){return this.android() && /mobile/i.test(this.userAgent)},
+        androidTablet: function(){return this.android() && !this.androidPhone()},
+        blackberry: function(){return /blackberry/i.test(this.userAgent) || /BB10/i.test(this.userAgent)},
+        linux: function(){return /linux/i.test(this.appVersion)},
+        mac: function(){return /mac/i.test(this.appVersion)},
+        windows: function(){return /win/i.test(this.appVersion)},
+        windowsPhone: function(){return this.windows() && /phone/i.test(this.userAgent)},
+        windowsTablet: function(){return this.windows() && !this.windowsPhone() && /touch/i.test(this.userAgent)},
+        mobile: function(){return this.iphone() || this.androidPhone() || this.blackberry() || this.windowsPhone();},
+        tablet: function(){return this.ipad() || this.androidTablet() || this.windowsTablet()},
+        desktop: function(){return !this.mobile() && !this.tablet()}
+    },
 
     iframeRezizeTimeout: null,
     /**
@@ -787,10 +837,25 @@ var JotForm = {
         }
     },
 
+    setIFrameDeviceType: function() {
+        if (window.FORM_MODE !== 'cardform') {
+            return;
+        }
+        window.parent.postMessage('setDeviceType:' + window.CardLayout.layoutParams.deviceType + ':', '*');
+    },
+
 
     handleIFrameHeight: function () {
         var form = $$('.jotform-form').length > 0 ? $$('.jotform-form')[0] : $$('body')[0];
         var height = Math.max(form.getHeight(), form.scrollHeight, form.offsetHeight);
+
+        // Cover Image
+        var formWrapper = document.querySelector('.form-all');
+        var margin = parseInt(getComputedStyle(formWrapper).marginTop, 10);
+        if (!isNaN(margin)) {
+          height += margin;
+        }
+
 
         // if this is a captcha verification page, set height to 300
         height = ( document.title === 'Please Complete' ) ? 300 : height;
@@ -840,12 +905,28 @@ var JotForm = {
                 return Math.max(maxCardHeight, childrenHeight);
             }, 0);
 
-            var emInPx = 16;
-            var approxSpacingsInEm = 8.725;
-            var spacingsInPx = emInPx * approxSpacingsInEm;
+            // var emInPx = window.getComputedStyle(document.querySelector('.jfCard')).fontSize.slice(0,-2);
+            var jfCard = document.querySelector('jfCard');
+            if(jfCard) {
+                var emInPx = jfCard.getStyle("fontSize").slice(0,-2);
+                var approxSpacingsInEm = 8.725;
+                var spacingsInPx = emInPx * approxSpacingsInEm;
+                var formHeight = (((formModeWrapperHeight * 2) + maxCardHeight) + spacingsInPx) * (50 / 29);
+            }
+            var isSmartEmbed = $(document.body).hasClassName('isSmartEmbed');
+            // height = Math.max(formHeight, welcomeModeHeight);
+            // this calculation should be calculated from ground
+            height = isSmartEmbed ? 464 : 640;
 
-            var formHeight = (((formModeWrapperHeight * 2) + maxCardHeight) + spacingsInPx) * (50 / 29);
-            height = Math.max(formHeight, welcomeModeHeight);
+            // checking for smart and/or inline embed settings
+            try {
+                var formFrame = window.parent.document.querySelector('[id="' + form.id + '"], [id="JotFormIFrame-' + form.id + '"]');
+                if (formFrame && formFrame.hasAttribute('data-frameHeight')) {
+                    height = formFrame.getAttribute('data-frameHeight');
+                }
+            } catch(e) {
+                /* noop */
+            }
         }
 
         if ("console" in window) {
@@ -1311,6 +1392,20 @@ var JotForm = {
      */
     initMultipleUploads: function () {
         var self = this;
+        // for mobile; prevent device sleep
+        if (JotForm.browserIs.mobile()) {
+            var loadingNoSleepScript = true;
+            JotForm.loadScript(window.location.protocol + '//' + window.location.host + '/js/vendor/NoSleep.min.js?v_' + (new Date()).getTime(), function () {
+                loadingNoSleepScript = false;
+            });
+            var toggleNoSleep = function () {
+                if (loadingNoSleepScript || typeof NoSleep === 'undefined') { return; }
+                var noSleep = new NoSleep();
+                noSleep.enable();
+                document.removeEventListener('click', toggleNoSleep, true);
+            };
+            document.addEventListener('click', toggleNoSleep, true);
+        }
 
         $$('.form-upload-multiple').each(function (file) {
             var parent = file.up('div');
@@ -1318,26 +1413,48 @@ var JotForm = {
             var formID = f.formID.value;
             var uniq = formID + "_" + JotForm.uniqueID;
 
+            // Handle upload fail validation
+            parent.addClassName('validate[multipleUpload]');
+
             // Handle default validations. reuired field
             var className = file.className;
             if (className.include("validate[required]")) {
                 if (parent.className.indexOf("validate[required]") === -1) {
                     parent.addClassName("validate[required]");
                 }
-                parent.validateInput = function () {
-                    // Don't fire validations for hidden elements
-                    if (!JotForm.isVisible(parent)) {
+            }
+
+            parent.validateInput = function() {
+                // Don't fire validations for hidden elements
+                if (!JotForm.isVisible(parent)) {
+                    JotForm.corrected(parent);
+                    return true;
+                }
+
+                var fileList = parent.select('.qq-upload-list li');
+                if (fileList.length < 1) {
+                    if (parent.match('[class*=validate[required]]')) {
+                        JotForm.corrected(parent);
+                        return JotForm.errored(parent, JotForm.texts.required);
+                    }else{
                         JotForm.corrected(parent);
                         return true;
                     }
-                    if (parent.select('.qq-upload-list li').length < 1) {
-                        JotForm.errored(parent, JotForm.texts.required);
-                        return false;
+                } else {
+                    var status = true;
+                    fileList.each(function(elem) {
+                        if (elem.getAttribute('class').indexOf('fail') >= 0) {
+                            status = false;
+                        }
+                    });
+                    if (status) {
+                        JotForm.corrected(parent);
+                        return true;
                     } else {
-                        JotForm.corrected(parent);
-                        return true;
+                        JotForm.errored(parent, JotForm.texts.multipleFileUploads_uploadFailed);
+                        return false;
                     }
-                };
+                }
             }
 
             // Create temp upload folder key
@@ -1365,10 +1482,11 @@ var JotForm = {
             if (!buttonText) {
                 buttonText = "Upload a File";
             }
-            if(m = file.next(".cancelText")) {
+            //Arif: adding sublabel wrapped the original element, avoiding selection of the text
+            if (m = parent.querySelector("span.cancelText")) {
                 cancelText = m.innerText;
             }
-            if(m = file.next(".ofText")) {
+            if (m = parent.querySelector("span.ofText")) {
                 ofText = m.innerText;
             }
 
@@ -1405,6 +1523,7 @@ var JotForm = {
                     fileLimitError: self.texts.multipleFileUploads_fileLimitError
                 },
                 onComplete: function (id, filename, response) {
+                    console.log('onComplete', arguments);
                     if (response.success) {
                         // append uploaded filename to a hidden input for backend validation
                         var qFolder = file.name.replace('[]', '');
@@ -1420,6 +1539,13 @@ var JotForm = {
                         }
                         uploadHidden.setValue(filename);
 
+                        var $fileServer = $('file_server');
+                        if (!$fileServer) {
+                            $fileServer = new Element('input', { id: 'file_server', type: 'hidden', name: 'file_server' });
+                            f.insert({ top: $fileServer });
+                        }
+                        $fileServer.setValue(response.fileServer);
+
                         // This is needed for validations. Removes required message
                         parent.value = 'uploaded';
                         JotForm.corrected(parent);
@@ -1430,14 +1556,11 @@ var JotForm = {
                     $(id).remove();
                 },
                 showMessage: function (message) {
+                    console.log('showMessage', arguments);
                     // clear any previous error
                     JotForm.corrected(parent);
                     // show error
                     JotForm.errored(parent, message);
-                    // clear again after 3 secs
-                    setTimeout(function () {
-                        JotForm.corrected(parent);
-                    }, 3000);
                 },
                 params: {
                     action: 'multipleUpload',
@@ -1513,7 +1636,7 @@ var JotForm = {
     /**
      * Hiddenly submits the form on backend
      */
-    hiddenSubmit: function (frm) {
+    hiddenSubmit: function (frm, options) {
         if (JotForm.currentSection) {
             JotForm.currentSection.select('.form-pagebreak')[0].insert(
                 new Element('div', {className: 'form-saving-indicator'})
@@ -1552,7 +1675,9 @@ var JotForm = {
         $$('.custom-hint-group').each(function (elem) { //remove textarea hints
             elem.hideCustomPlaceHolder();
         });
-        $('current_page').value = JotForm.currentSection.pagesIndex;
+        if($('current_page')) {
+          $('current_page').value = JotForm.currentSection.pagesIndex;
+        }
         frm.writeAttribute('target', 'hidden_submit');
         frm.insert({
             top: new Element('input', {
@@ -1561,20 +1686,80 @@ var JotForm = {
                 id: 'hidden_submission'
             }).putValue("1")
         });
+        var isCardForm = window.FORM_MODE == 'cardform';
+        if (isCardForm) {
+            frm.insert({
+                top: new Element('input', {
+                    type: 'hidden',
+                    name: 'continueLater',
+                    id: 'continueLater'
+                }).putValue("1")
+            });
+        }
+        if(options && !!options.async){
 
-        frm.submit();
-        frm.writeAttribute('target', '');
-        $('hidden_submission').remove();
+          $(frm).request({
+            onCreate: function(response) {
+              var t = response.transport;
+              t.setRequestHeader = t.setRequestHeader.wrap(function(original, k, v) {
+                if (/^(accept|accept-language|content-language)$/i.test(k))
+                  return original(k, v);
+                if (/^content-type$/i.test(k) &&
+                    /^(application\/x-www-form-urlencoded|multipart\/form-data|text\/plain)(;.+)?$/i.test(v))
+                  return original(k, v);
+                return;
+              });
+            },
 
-        $$('.custom-hint-group').each(function (elem) { //reapply textarea hints
-            elem.showCustomPlaceHolder();
-        });
+            onComplete: function(response) {
+              if (isCardForm) {
+                JotForm.saving = false;
+                JotForm.enableButtons();
+              }
+              if (200 === response.status) {
+                if (options.onSuccessCb) options.onSuccessCb();
+              } else {
+                if (options.onFailureCb) options.onFailureCb();
+              }
 
-        $$('.form-radio-other,.form-checkbox-other').each(function (el) { //reenable other textbox if not "other" option selected
-            if (!el.checked && JotForm.getOptionOtherInput(el)) {
-                JotForm.getOptionOtherInput(el).enable();
+              if(options.onCompleteCb) options.onCompleteCb();
+
+              frm.writeAttribute('target', '');
+              if (isCardForm) {
+                $('continueLater').remove();
+              }
+              $('hidden_submission').remove();
+
+              $$('.custom-hint-group').each(function (elem) { //reapply textarea hints
+                elem.showCustomPlaceHolder();
+              });
+
+              $$('.form-radio-other,.form-checkbox-other').each(function (el) { //reenable other textbox if not "other" option selected
+                if (!el.checked && JotForm.getOptionOtherInput(el)) {
+                  JotForm.getOptionOtherInput(el).enable();
+                }
+              });
             }
-        });
+          });
+
+        }else{
+          frm.submit();
+          frm.writeAttribute('target', '');
+          if (isCardForm) {
+            $('continueLater').remove();
+          }
+          $('hidden_submission').remove();
+
+          $$('.custom-hint-group').each(function (elem) { //reapply textarea hints
+            elem.showCustomPlaceHolder();
+          });
+
+          $$('.form-radio-other,.form-checkbox-other').each(function (el) { //reenable other textbox if not "other" option selected
+            if (!el.checked && JotForm.getOptionOtherInput(el)) {
+              JotForm.getOptionOtherInput(el).enable();
+            }
+          });
+        }
     },
     /**
      * Checks the upload fields after hidden submission
@@ -1583,17 +1768,27 @@ var JotForm = {
      */
     makeUploadChecks: function () {
         var formIDField = $$('input[name="formID"]')[0];
-        var a = new Ajax.Jsonp(JotForm.url + 'server.php', {
-            parameters: {
-                action: 'getSavedUploadResults',
-                formID: formIDField.value,
-                sessionID: document.get.session
-            },
+        var parameters = {
+            action: 'getSavedUploadResults',
+            formID: formIDField.value,
+            sessionID: this.sessionID
+        };
+        if (this.submissionID) {
+            parameters.submissionID = this.submissionID;
+        }
+        if (this.submissionToken) {
+            parameters.submissionToken = this.submissionToken;
+        }
+        var a = new Ajax.Jsonp(JotForm.server, {
+            parameters: parameters,
             evalJSON: 'force',
             onComplete: function (t) {
                 var res = t.responseJSON;
-                if (res.success) {
+                if (res && res.success) {
                     if (res.submissionID && !$('submission_id')) {
+                        if (!JotForm.submissionID) {
+                            JotForm.setSubmissionID(res.submissionID);
+                        }
                         formIDField.insert({
                             after: new Element('input', {
                                 type: 'hidden',
@@ -1602,7 +1797,9 @@ var JotForm = {
                             }).putValue(res.submissionID)
                         });
                     }
-                    JotForm.editMode(res, true); // Don't reset fields
+                    if (window.FORM_MODE !== 'cardform') {
+                        JotForm.editMode(res, true); // Don't reset fields
+                    }
                 }
             }
         });
@@ -1612,77 +1809,87 @@ var JotForm = {
      */
     handleSavedForm: function () {
 
-        if (!('session' in document.get) || !(document.get.session.length > 0)) {
+        if (!JotForm.sessionID) {
             return;
         }
         JotForm.saveForm = true;
 
+        var isCardForm = window.FORM_MODE == 'cardform';
         var formIDField = $$('input[name="formID"]')[0];
+        var sessionIDField = document.getElementById('session');
+        if (!sessionIDField) {
+            formIDField.insert({
+                after: new Element('input', {
+                    type: 'hidden',
+                    name: 'session_id',
+                    id: "session"
+                }).putValue(JotForm.sessionID)
+            }); 
+        }
+        if (!isCardForm) {
+            formIDField.insert({
+                after: new Element('input', {
+                    type: 'hidden',
+                    id: 'current_page',
+                    name: 'current_page'
+                }).putValue(0)
+            });
+        }
 
-        formIDField.insert({
-            after: new Element('input', {
-                type: 'hidden',
-                name: 'session_id',
-                id: "session"
-            }).putValue(document.get.session)
-        });
-
-        formIDField.insert({
-            after: new Element('input', {
-                type: 'hidden',
-                id: 'current_page',
-                name: 'current_page'
-            }).putValue(0)
-        });
-
-        var a = new Ajax.Jsonp(JotForm.url + 'server.php', {
-            parameters: {
-                action: 'getSavedSubmissionResults',
-                formID: formIDField.value,
-                sessionID: document.get.session,
-                URLparams: window.location.href
-            },
+        // Flag for blocking pressing next/prev button while loading submission data
+        JotForm.loadingPendingSubmission = true;
+        var parameters = {
+            action: 'getSavedSubmissionResults',
+            formID: formIDField.value,
+            sessionID: this.sessionID,
+            URLparams: window.location.href
+        };
+        if (this.submissionID) {
+            parameters.submissionID = this.submissionID;
+        }
+        if (this.submissionToken) {
+            parameters.submissionToken = this.submissionToken;
+        }
+        var a = new Ajax.Jsonp(JotForm.url + '/server.php', {
+            parameters: parameters,
             evalJSON: 'force',
             onComplete: function (t) {
                 var res = t.responseJSON;
                 if (res.success) {
                     if (res.submissionID) {
-                        formIDField.insert({
-                            after: new Element('input', {
-                                type: 'hidden',
-                                name: 'submission_id',
-                                id: 'submission_id'
-                            }).putValue(res.submissionID)
-                        });
+                        if (!$('submission_id')) {
+                            formIDField.insert({
+                                after: new Element('input', {
+                                    type: 'hidden',
+                                    name: 'submission_id',
+                                    id: 'submission_id'
+                                }).putValue(res.submissionID)
+                            });
+                            if (!JotForm.submissionID) {
+                                JotForm.setSubmissionID(res.submissionID);
+                            }
+                        }
 
                         try {
                             JotForm.editMode(res);
                         } catch (e) {
+                            // Releasing blocking of next/prev buttons after submissin data filling has done
+                            JotForm.loadingPendingSubmission = false;
+
                             console.error(e);
                         }
                         JotForm.openInitially = res.currentPage - 1;
                     }
 
                 }
+
+                // Releasing blocking of next/prev buttons after submissin data filling has done
+                JotForm.loadingPendingSubmission = false;
             }
         });
     },
-    /**
-     * Place the form title on pages title to remove the Form text on there
-     */
-    setTitle: function () {
-        // Do this only when page title is form. otherwise it can overwrite the users own title
-        if (document.title == "Form") {
-            var head;
-            if ((head = $$('.form-header')[0])) {
-                try {
-                    document.title = head.innerHTML.stripTags().strip();
-                    document.title = document.title.unescapeHTML();
-                } catch (e) {
-                    document.title = head.innerHTML;
-                }
-            }
-        }
+    setSubmissionID: function(submissionID) {
+        this.submissionID = submissionID;
     },
     /*
      * Add browser class to html element.
@@ -1730,31 +1937,7 @@ var JotForm = {
      * Populate hidden field with user's browser info
      */
     populateBrowserInfo: function (id) {
-        var userAgent = 'navigator' in window && 'userAgent' in navigator && navigator.userAgent.toLowerCase() || '';
-        var vendor = 'navigator' in window && 'vendor' in navigator && navigator.vendor.toLowerCase() || '';
-        var appVersion = 'navigator' in window && 'appVersion' in navigator && navigator.appVersion.toLowerCase() || '';
-        var is = {
-            chrome: function(){return /chrome|chromium/i.test(userAgent) && /google inc/.test(vendor)},
-            firefox: function(){return /firefox/i.test(userAgent)},
-            ie: function(){return /msie/i.test(userAgent) || "ActiveXObject" in window || /edge\//i.test(userAgent)},
-            safari: function(){return /safari/i.test(userAgent) && /apple computer/i.test(vendor)},
-            operabrowser: function(){return userAgent.indexOf("Opera") > -1},
-            iphone: function(){return /iphone/i.test(userAgent) || /iphone/i.test(appVersion)},
-            ipad: function(){return /ipad/i.test(userAgent) || /ipad/i.test(appVersion)},
-            ios: function(){return is.iphone() || is.ipad()},
-            android: function(){return /android/i.test(userAgent)},
-            androidPhone: function(){return is.android() && /mobile/i.test(userAgent)},
-            androidTablet: function(){return is.android() && !is.androidPhone()},
-            blackberry: function(){return /blackberry/i.test(userAgent) || /BB10/i.test(userAgent)},
-            linux: function(){return /linux/i.test(appVersion)},
-            mac: function(){return /mac/i.test(appVersion)},
-            windows: function(){return /win/i.test(appVersion)},
-            windowsPhone: function(){return is.windows() && /phone/i.test(userAgent)},
-            windowsTablet: function(){return is.windows() && !is.windowsPhone() && /touch/i.test(userAgent)},
-            mobile: function(){return is.iphone() || is.androidPhone() || is.blackberry() || is.windowsPhone();},
-            tablet: function(){return is.ipad() || is.androidTablet() || is.windowsTablet()},
-            desktop: function(){return !is.mobile() && !is.tablet()}
-        };
+        var is = JotForm.browserIs;
 
         function OS() {
             if (is.android()) return "Android";
@@ -1825,8 +2008,19 @@ var JotForm = {
                 var eHour = $('input_' + id + '_hourSelectRange').value;
                 var eMin = $('input_' + id + '_minuteSelectRange').value;
                 var eAMPM = $('input_' + id + '_ampmRange') ? $('input_' + id + '_ampmRange').value : 'no';
-                var lab = $('input_' + id + '_ampmRange') ? '_ampmRange' : '_dummy';    
-                var durationLabel = window.FORM_MODE === 'cardform' ? $$('div[for=input_' + id + lab + ']').first() : $$('label[for=input_' + id + lab + ']').first();
+                var lab = $('input_' + id + '_ampmRange') ? '_ampmRange' : '_dummy';
+
+                var durationLabel = $$('label[for=input_' + id + lab + ']').first();
+                if (window.FORM_MODE === 'cardform') {
+                    if (lab == '_ampmRange') {
+                        durationLabel = $$('label[for=input_' + id + lab + ']').first();
+                    } else {
+                        durationLabel = $$('#input_' + id + lab).first();
+                    }
+                }
+
+                // var durationLabel = window.FORM_MODE === 'cardform' ? $$('div[for=input_' + id + lab + ']').first() : $$('label[for=input_' + id + lab + ']').first();
+
                 if (sHour.length > 0 && sMin.length > 0 && eHour.length > 0 && eMin.length > 0) {
                     if (sAMPM == 'PM' && sHour != 12) sHour = parseInt(sHour) + 12;
                     if (sAMPM == 'AM' && sHour == 12) sHour = 0;
@@ -1970,6 +2164,7 @@ var JotForm = {
 
                     lite_mode.removeClassName("invalidDate");
                     if(lite_mode.value === "") {
+                        field.fire('date:changed');
                         return clearDate();
                     }
                     if(lite_mode.value.length == ((seperator.length*2) + format.length)){
@@ -2049,7 +2244,7 @@ var JotForm = {
     currentDateReadonly: function () {},
 
     calendarClose: function (calendar) {
-        var calendarFields = $$('input[id*="' + calendar.dateField.id.match(/[0-9]+/)[0] + '"]');
+        var calendarFields = $$('input[id*="' + calendar.dateField.id.match(/_[0-9]+/)[0] + '"]');
         var validations = calendar.dateField.className.replace(/.*validate\[(.*)\].*/, '$1').split(/\s*,\s*/);
         var incomplete = calendarFields.any(function (c) {
             return c.value.empty()
@@ -2057,6 +2252,9 @@ var JotForm = {
         if ((validations.include("required") || validations.include("disallowPast"))
             && incomplete) {
             calendar.dateField.validateInput();
+        }
+        if(validations.include("required") && !incomplete ){
+            JotForm.corrected($('id_' + calendar.id));
         }
         calendar.hide();
     },
@@ -2099,21 +2297,39 @@ var JotForm = {
             if (id.match('other_')) {
                 id = input.id.replace(/other_(\d+)/, '$1');
             }
+            var other = $('other_' + id); // radio button
+            if (other) {
+                var other_input = $('input_' + id); // text input
 
-            if ($('other_' + id)) {
-                var other = $('other_' + id);
-                var other_input = $('input_' + id);
-                var otherOption = input.type === 'radio' ? input : other;
                 other_input.observe('keyup', function () {
                     other.value = other_input.value;
+                    var willInputBeChecked = other_input.value !== '';
+                    var isInputChecked = other.checked;
+                    if (!isInputChecked && willInputBeChecked) {
+                        other_input.click();
+                    }
+                    setTimeout(function() { // Thank you safari.
+                        other.checked = willInputBeChecked;
+                    });
                 });
-                other_input.observe('click', function () {
-                    $('other_' + id).checked = true;
+                other_input.observe('click', function (e) {
+                    // if(e.handled) { return; } e.handled = true; // Prevent the block from running total option count times, uncomment if you dare.
                     other_input.value = other_input.value === other_input.getAttribute('data-otherhint') ? '' : other_input.value;
-                });
-                // perform only on the "Other" option if input is check box
-                otherOption.observe('click', function () {
 
+                    if(!other.checked){
+                      other.checked = other_input.value !== '';
+                    }
+                });
+
+                // perform only on the "Other" option if input is check box
+                other.observe('click', function (event) {
+                    if (window.FORM_MODE && window.FORM_MODE === 'cardform') {
+                        if (other_input.value === '') {
+                          other.checked = false;
+                          event.preventDefault();  
+                          Event.stop(event);
+                        } 
+                    }
                     if (other.checked) {
                         other_input.select();
                     } else {
@@ -2137,7 +2353,8 @@ var JotForm = {
                     var toSwap = $("id_" + id).select('.form-' + type + '-item')[i];
                     var randy = Math.floor(Math.random() * length);
                     var swappedOut = options[randy].replace(toSwap);
-                    var insertAfter = $("id_" + id).select('.form-' + type + '-item')[i].next() ? $("id_" + id).select('.form-' + type + '-item')[i].next() : $("id_" + id).select('.form-' + type + '-item')[i];
+                    var next = toSwap.next();
+                    var insertAfter = (next && next !== options[length]) ? next : toSwap;
                     insertAfter.insert({after: swappedOut});
                 }
 
@@ -2237,8 +2454,13 @@ var JotForm = {
                     }
                 }
 
+                var isTargetActive = e && e.target && e.target === document.activeElement;
+                if (window.FORM_MODE === 'cardform' && typeof document.activeElement !== 'undefined' && typeof document.activeElement.up === 'function') {
+                    isTargetActive = monthElement.up('.jfCard-question') === document.activeElement.up('.jfCard-question');
+                }
+
                 if (!erroredElement && hourElement && minElement && (hourElement.value != "" || minElement.value != "")
-                    && !(e && e.target && e.target === document.activeElement)) // do not produce an error yet if target is currently active
+                    && !isTargetActive) // do not produce an error yet if target is currently active
                 {
                     var hour = (hourElement.value.strip() == '') ? -1 : +hourElement.value;
                     var min = (minElement.value.strip() == '') ? -1 : +minElement.value;
@@ -2616,10 +2838,16 @@ var JotForm = {
             var strict = '[name$="_' + pair.key + '"]';
             var input;
 
-            input = $$('.form-star-rating' + n)[0];
-            if (input) {
-                input.setRating(parseInt(pair.value));
-                return;
+            if(window.FORM_MODE !== 'cardform'){
+                input = $$('.form-star-rating' + n)[0];
+                if (input) {
+                    input.setRating(parseInt(pair.value));
+                    return;
+                }
+            }
+            // if there are  two or more similar params e.g., ?name=John&name=Dave
+            if (typeof pair.value === 'object') {
+                pair.value = pair.value[0] || "";
             }
 
             input = $$('.form-slider' + n)[0]; //Add classname in builder?
@@ -2631,6 +2859,7 @@ var JotForm = {
             if (pair.key == "coupon-input" && $('coupon-input')) {
                 $('coupon-input').setValue(pair.value);
                 $('coupon-button').triggerEvent('click');
+                $(window).scrollTo(0,0);
                 return;
             }
 
@@ -2710,6 +2939,11 @@ var JotForm = {
                 });
             } else if (input) {
                 input.value = pair.value.replace(/\{\+\}/g,'{plusSign}').replace(/\+/g, ' ').replace(/\{plusSign\}/g,'+');
+                // do not strip plus signs when value is passed from another jotform (b#1231139)
+                // Don't strip plus sign if the input is email (#1416809)
+                if (document.referrer.match(/jotform/) || input.getAttribute('type') === 'email') {
+                    input.value = pair.value;
+                }
                 JotForm.defaultValues[input.id] = input.value;
             }
 
@@ -2766,13 +3000,17 @@ var JotForm = {
                 input.removeClassName('form-custom-hint');
             }
         });
+
+        setTimeout(function(){
+            JotForm.runAllConditions();
+        }, 200);
     },
     /**
      * Reset form while keeping the values of hidden fields
      * @param {Object} frm
      */
     resetForm: function (frm) {
-        var hiddens = $(frm).select('input[type="hidden"]');
+        var hiddens = $(frm).select('input[type="hidden"], #input_language');
         hiddens.each(function (h) {
             h.__defaultValue = h.value;
         });
@@ -2800,7 +3038,7 @@ var JotForm = {
 
         if (!window.editModeFunction) {
             var self = this;
-            this.loadScript('/js/form.edit.mode.js?v_' + (new Date()).getTime(), function () {
+            this.loadScript(preLink + '/js/form.edit.mode.js?v_' + (new Date()).getTime(), function () {
                 //editModeFunction is function name defined in form.edit.mode.js
                 self.editMode = editModeFunction;
                 self.editMode(data, noreset, skipField);
@@ -2813,6 +3051,9 @@ var JotForm = {
      * Helper function that will tell if form is in edit mode
      */
     isEditMode: function () {
+        if (window.FORM_MODE === 'cardform') {
+            return (typeof window.editModeFunction !== 'undefined') && CardForm.layoutParams.isEditMode;
+        }
         return (typeof window.editModeFunction !== 'undefined');
     },
     /**
@@ -2835,7 +3076,13 @@ var JotForm = {
     },
 
     setCalculations: function (calculations) {
-        JotForm.calculations = calculations;
+        if(!JotForm.calculations || Object.keys(JotForm.calculations).length === 0) {
+            JotForm.calculations = calculations;
+        } else {
+            Object.values(calculations).forEach(function(calculation) {
+                JotForm.calculations.push(calculation);
+            });
+        }
     },
 
     prepareCalculationsOnTheFly: function (questions) {
@@ -2855,52 +3102,70 @@ var JotForm = {
                 JotForm.calculations = [];
             }
 
-            questions.forEach(function(question) {
+            questions.each(function(question) {
                 if (question) {
                     // Create lookup array
                     questions_by_name[question.name] = question.qid;
                 }
             });
 
-            questions.forEach(function(question) {
+            questions.each(function(question) {
                 if (question) {
-                    var value = '';
+                    var values = [];
                     switch (question.type) {
                         // some questions may have their values on a different place
                         case 'control_textbox':
-                            value = question.text;
-                            break;
-
+                          question.text !== '' ? values.push(question.text) : void(0);
+                          question.subLabel !== '' ? values.push(question.subLabel) : void(0);
+                          question.description !== '' ? values.push(question.description) :void(0);
+                          break;
+                        case 'control_image':
+                          question.labelText !== '' ? values.push(question.labelText) : void(0);
+                          break;
                         default:
-                            value = question.text;
+                          question.text !== '' ? values.push(question.text) : void(0);
+                          question.description !== '' ? values.push(question.description) :void(0);
                     }
 
-                    var regex = /\{([^\}]*)\}/gim;
-                    // collect all questions in array
-                    for (var questions = []; result = regex.exec(value); questions.push(result));
+                    for(var value; value = values.shift();) {
+                      var regex = /\{([^\}]*)\}/gim;
+                      // collect all questions in array
+                      for (var questions = []; result = regex.exec(value); questions.push(result));
 
-                    if (questions.length > 0) {
-                        // reorganise the matrix
-                        questions = transpose(questions);
+                      if (questions.length > 0) {
+                          // reorganise the matrix
+                          questions = transpose(questions);
 
-                        questions[1].forEach(function(question_name) {
-                            JotForm.calculations.push({
-                                decimalPlaces: "2",
-                                defaultValue: "",
-                                equation: "{" + questions_by_name[question_name] + "}",
-                                ignoreHiddenFields: "",
-                                insertAsText: "1",
-                                isLabel: question.type === "control_text" ? "" : "1",
-                                newCalculationType: "1",
-                                operands: questions_by_name[question_name],
-                                readOnly: "",
-                                replaceText: question_name,
-                                resultField: question.qid,
-                                showBeforeInput: "",
-                                tagReplacement: "1",
-                                useCommasForDecimals: ""
-                            });
-                        });                        
+                          questions[1].forEach(function(question_name) {
+                              var qname;
+                              if(question_name.indexOf(':') > -1){
+                                qname = questions_by_name[question_name.split(':')[0]]
+                              } else{
+                                qname = questions_by_name[question_name.split('[')[0]];
+                              }
+                              // there may be a multiline question field in the question_name:
+                              var multilineFieldRegex = /\[(.*?)\]/gi;
+                              var multilineFieldResult = multilineFieldRegex.exec(question_name);
+                              var multilineFieldEquation = multilineFieldResult ? qname + '|' + multilineFieldResult[1] : '';
+
+                              JotForm.calculations.push({
+                                  decimalPlaces: "2",
+                                  defaultValue: "",
+                                  equation: "{" + (multilineFieldEquation || qname) + "}",
+                                  ignoreHiddenFields: "",
+                                  insertAsText: "1",
+                                  isLabel: question.type === "control_text" ? "" : "1",
+                                  newCalculationType: "1",
+                                  operands: qname,
+                                  readOnly: "",
+                                  replaceText: question_name,
+                                  resultField: question.qid,
+                                  showBeforeInput: "",
+                                  tagReplacement: "1",
+                                  useCommasForDecimals: ""
+                              });
+                          });                        
+                      }
                     }
                 }
             });
@@ -2975,6 +3240,8 @@ var JotForm = {
 
             return element;
         }
+        // check if element is currently hidden
+        var wasHidden = element.hasClassName('form-field-hidden') || element.hasClassName('always-hidden');
 
         element.removeClassName('form-field-hidden');
         element.removeClassName('always-hidden');
@@ -3041,6 +3308,11 @@ var JotForm = {
                 });
             }
         }
+        
+        // Re-calculate cardform matrix size
+        if (window.FORM_MODE == 'cardform' && wasHidden && ($('id_' + field) && $('id_' + field).readAttribute('data-type') == 'control_matrix')) {
+            JotForm.setMatrixLayout(field, false);
+        }
 
         // if donation and has a source field
         if (JotForm.donationField && element.down('[data-component="paymentDonation"][data-custom-amount-field]')) {
@@ -3055,7 +3327,10 @@ var JotForm = {
         var referrer = document.getElementById("customFieldFrame_" + id) ? document.getElementById("customFieldFrame_" + id).src : false;
         if (referrer) {
             var frame = (navigator.userAgent.indexOf("Firefox") != -1) ? getIframeWindow(window.frames["customFieldFrame_" + id]) : window.frames["customFieldFrame_" + id];
-            if (frame) {
+            var isFrameXDready = (!$("customFieldFrame_" + id).hasClassName('frame-xd-ready') && !$("customFieldFrame_" + id).retrieve('frame-xd-ready')) ? false : true;
+
+            // only post a message when its ready to receive a post message
+            if (frame && isFrameXDready) {
                 XD.postMessage(JSON.stringify({type: "show", qid: id}), referrer, frame);
 
                 // send ready message event at the same time for widgets
@@ -3069,6 +3344,16 @@ var JotForm = {
                         }
                     }
                 }
+            }
+        }
+    },
+
+    reloadWidget: function (id) {
+        var referrer = document.getElementById("customFieldFrame_" + id) ? document.getElementById("customFieldFrame_" + id).src : false;
+        if (referrer) {
+            var frame = (navigator.userAgent.indexOf("Firefox") != -1) ? getIframeWindow(window.frames["customFieldFrame_" + id]) : window.frames["customFieldFrame_" + id];
+            if (frame) {
+                XD.postMessage(JSON.stringify({type: "reload", qid: id}), referrer, frame);
             }
         }
     },
@@ -3109,7 +3394,7 @@ var JotForm = {
                     type: 'hidden',
                     name: 'hiddenPaymentField',
                     id: 'hiddenPaymentField',
-                    value: 1,
+                    value: 1
                 }));
             }
             if (JotForm.clearFieldOnHide == "enable" && !dontClear && !JotForm.ignoreInsertionCondition) {
@@ -3405,14 +3690,27 @@ var JotForm = {
         if (JotForm.typeCache[id]) {
             return JotForm.typeCache[id];
         }
-        var type = false;
+
+        if (typeof id === 'string' && id.indexOf('|') > -1) {
+            var tempField = id.split( '|' );
+            id = tempField[0] + '_field_' + tempField[1];
+        }
+
+        var type = "other";
         if ($('id_' + id) && $('id_' + id).readAttribute('data-type') == "control_text") {
             type = 'html';
+        } else if ($('input_' + id + '_pick') || ($('id_' + id) && $('id_' + id).readAttribute('data-type') == "control_datetime")) {
+          type = 'datetime';
         } else if ($('input_' + id)) {
             type = $('input_' + id).nodeName.toLowerCase() == 'input' ? $('input_' + id).readAttribute('type').toLowerCase() : $('input_' + id).nodeName.toLowerCase();
             if ($('input_' + id).hasClassName("form-radio-other-input")) {
                 type = "radio";
             }
+
+            if ($('input_' + id).hasClassName("js-forMixed")) {
+                type = "mixed";
+            }
+
             if ($('input_' + id).hasClassName("form-checkbox-other-input")) {
                 type = "checkbox";
             }
@@ -3437,8 +3735,6 @@ var JotForm = {
                 type = "rating";
             }
 
-        } else if ($('input_' + id + '_pick') || ($('id_' + id) && $('id_' + id).readAttribute('data-type') == "control_datetime")) {
-            type = 'datetime';
         } else if ($('input_' + id + '_month')) {
             type = 'birthdate';
         } else if ($('input_' + id + '_hourSelect')) {
@@ -3575,10 +3871,17 @@ var JotForm = {
     checkCondition: function (condition) {
         var any = false, all = true;
         var filled;
+        // Handle notEqual and Equal differently
+        var anyCalculationForMultiInput = {
+            notEquals: [],
+            equals: [],
+            equalsCount: 0,
+            notEqualsCount: 0
+        };
         $A(condition.terms).each(function (term) {
             var value;
             var anotherField = JotForm.getFieldIdFromFieldRef(term.value);
-
+            term.field = String(term.field);
             try {
                 var fieldType = JotForm.getInputType(term.field);
                 switch (fieldType) {
@@ -3761,6 +4064,10 @@ var JotForm = {
                         }
 
                         var otherValue = $('id_' + term.field).down(".form-"+fieldType+"-other-input") ? $('id_' + term.field).down(".form-"+fieldType+"-other-input").getAttribute('data-otherhint') : "";
+                        // Count terms
+                        if(term.operator == 'notEquals' || term.operator == 'equals') {
+                            anyCalculationForMultiInput[term.operator + 'Count']++;
+                        }
                         $$('#id_' + term.field + ' input').each(function (input) {
                             if (input.hasClassName('form-' + fieldType + '-other') && input.checked) {
                                 value = '-- '+otherValue+' --';
@@ -3769,17 +4076,22 @@ var JotForm = {
                                 value = value.replace(/_expanded/, '');
                             }
                             var termValue = term.value.strip();
-                            if (JotForm.checkValueByOperator(term.operator, termValue, value)) {
+                            var checkResult = JotForm.checkValueByOperator(term.operator, termValue, value);
+                            // Push condition result for each input
+                            if(term.operator == 'notEquals' || term.operator == 'equals') {
+                                anyCalculationForMultiInput[term.operator].push(checkResult)
+                            }
+                            if (checkResult) {
                                 any = true;
                             } else {
-                                // If not equals item is found condition should fail
                                 if (term.operator == 'notEquals' && termValue == value) {
-                                    any = false;
+                                    // If not equals item is found 'all' condition should fail
                                     all = false;
-                                    throw $break;
-                                }
-
-                                if (input.value == termValue || (input.hasClassName('form-' + fieldType + '-other') && termValue == '-- '+otherValue+' --')) {
+                                    // If condition is interested in 'all', then we can break each loop
+                                    if(condition.link.toLowerCase() == 'all') {
+                                        throw $break;
+                                    }
+                                } else if (input.value == termValue || (input.hasClassName('form-' + fieldType + '-other') && termValue == '-- '+otherValue+' --')) {
                                     all = false;
                                 }
                             }
@@ -3787,18 +4099,28 @@ var JotForm = {
                         break;
                     case "select":
 
-                        if (term.value) term.value = term.value.replace(/&amp;/g, '&');
+                        if (term.value) {
+                          term.value = term.value.replace(/&amp;/g, '&');
+                        }
 
-                        if ($('input_' + term.field) && $('input_' + term.field).multiple) {
+                        var tempInput = '';
+                        if (term.field.indexOf('|') > -1) {
+                          var tempSplit = term.field.split( '|' );
+                          tempInput = 'input_' + tempSplit[0] + '_field_' + tempSplit[1];
+                        } else {
+                          tempInput = 'input_' + term.field;
+                        }
+
+                        if ($(tempInput) && $(tempInput).multiple) {
                             if (term.operator == 'equals') {
-                                var option = $('input_' + term.field).select('option[value=' + term.value + ']');
+                                var option = $(tempInput).select('option[value=' + term.value + ']');
                                 if (option.length > 0 && option[0].selected) {
                                     any = true;
                                 } else {
                                     all = false;
                                 }
                             } else if (term.operator == 'notEquals') {
-                                var option = $('input_' + term.field).select('option[value=' + term.value + ']');
+                                var option = $(tempInput).select('option[value=' + term.value + ']');
                                 if (option.length > 0 && !option[0].selected) {
                                     any = true;
                                 } else {
@@ -3806,7 +4128,7 @@ var JotForm = {
                                 }
                             } else if (['isEmpty', 'isFilled'].include(term.operator)) {
                                 var selected = false;
-                                var arr = $('input_' + term.field).options;
+                                var arr = $(tempInput).options;
                                 for (var i = 0; i < arr.length; i++) {
                                     if (!arr[i].value.empty() && arr[i].selected == true) {
                                         selected = true;
@@ -3821,8 +4143,8 @@ var JotForm = {
                                     else all = false;
                                 }
                             }
-                        } else if ($('input_' + term.field)) {
-                            value = $('input_' + term.field).value;
+                        } else if ($(tempInput)) {
+                            value = $(tempInput).value;
                             if (value === undefined) {
                                 return;
                                 /* continue; */
@@ -3964,12 +4286,21 @@ var JotForm = {
                         break;
 
                     default:
-                        if(!$('input_' + term.field)) {
+                        var tempInput = '';
+
+                        if (term.field.indexOf('|') > -1) {
+                          var tempSplit = term.field.split( '|' );
+                          tempInput = 'input_' + tempSplit[0] + '_field_' + tempSplit[1];
+                        } else {
+                          tempInput = 'input_' + term.field;
+                        }
+
+                        if(!$(tempInput)) {
                             return;
                         }
 
-                        value = $('input_' + term.field).value;
-                        if ($('input_' + term.field).hinted) {
+                        value = $(tempInput).value;
+                        if ($(tempInput).hinted) {
                             value = "";
                         }
                         if (value === undefined) {
@@ -3988,13 +4319,78 @@ var JotForm = {
             }
         });
 
+        // TLDR Ticket ID: http://www.jotform.com/answers/1389173
+        // First of all, I'm ashamed of this particular fix. Sadly, that's how we roll in conditions
+        // What we were doing was that, for 'any', if we match a case that brakes condition 'any' turns into false and loop breaks
+        // This should only work for 'all' however it was already including 'any' option
+        // That was resulted in above ticket. This bug was not only for ImageChoice but for both MultipleChoice and Radio fields
+        // What I am doing is that, I am taking responses for both notEquals and equals from checkCondition
+        // anyCalculationForMultiInput object hold info for both terms
+        // This object will only be filled in 'equals' and 'notEquals' cases, it will not interfere with other input and condition types
+        //
+        // If condition is not for 'any' or 'any' is false, there is no need to look for terms
+        if(condition.link.toLowerCase() == 'any' && any) {
+            // Check if there are other conditions except notEquals or equals
+            // If there are, do not alter 'any'
+            if(condition.terms.length == anyCalculationForMultiInput.notEqualsCount + anyCalculationForMultiInput.equalsCount) {
+                // Find matching cases for equals and notEquals
+                anyLengthNotEquals = anyCalculationForMultiInput.notEquals.reduce(function(prev, curr) {
+                    if(!curr) prev++;
+                    return prev;
+                }, 0);
+                anyLengthEquals = anyCalculationForMultiInput.equals.reduce(function(prev, curr) {
+                    if(curr) prev++;
+                    return prev;
+                }, 0);
+                // If there is equals term and none of them passed condition
+                // If there is notEquals term and and all of them passed condition
+                if((anyCalculationForMultiInput.equalsCount && !anyLengthEquals) ||
+                    (anyCalculationForMultiInput.notEqualsCount && anyLengthNotEquals && anyLengthNotEquals === anyCalculationForMultiInput.notEqualsCount)) {
+                    any = false;
+                }
+            }
+        }
+
+        var conditionInfiniteLoop = function () {
+            // prevent calculation&condition infinite loop by limiting the nuber of times
+            // a calculation can be run on an element in a 500ms period
+            var timestamp = new Date().getTime();
+            var msPart = timestamp % 1000;
+            if (msPart < 500) {
+                msPart = "0";
+            } else {
+                msPart = "1";
+            }
+            var secPart = parseInt(timestamp / 1000);
+            var antiLoopKey = condition.id + '-' + secPart + '-' + msPart;
+            //create global antiLoop variable if not created yet
+              if (!("__antiConditionLoopCache" in window)) {
+                  window.__antiConditionLoopCache = {};
+              }
+            if (antiLoopKey in window.__antiConditionLoopCache) {
+                window.__antiConditionLoopCache[antiLoopKey]++;
+                if (window.__antiConditionLoopCache[antiLoopKey] > 19) {
+                    return true; //only allow same calc to trigger nine times in half a secondmultiple are needed for things like sliders that change quickly
+                }
+            } else {
+                window.__antiConditionLoopCache[antiLoopKey] = 1;
+            }
+
+            return false;
+        }
+
+        if(conditionInfiniteLoop()) return;
+
 
         if (condition.type == 'field') { // Field Condition
             // JotForm.log("any: %s, all: %s, link: %s", any, all, condition.link.toLowerCase());
             var isConditionValid = (condition.link.toLowerCase() == 'any' && any) || (condition.link.toLowerCase() == 'all' && all);
+            if (condition.disabled == true) return;
 
             condition.action.each(function (action) {
-                var matchingTermAction = condition.terms.any(function (term) {return term.field == action.field; });
+                var matchingTermAction = condition.terms.any(function (term) {
+                    return term.field == action.field;
+                });
 
                 if (isConditionValid) {
                     action.currentlyTrue = true;
@@ -4028,7 +4424,7 @@ var JotForm = {
                     }
                 }
 
-                JotForm.iframeHeightCaller();
+                if (window.FORM_MODE !== 'cardform') JotForm.iframeHeightCaller();
 
                 if ($('section_' + action.field) || ('fields' in action)) {
                     JotForm.runAllCalculations(true);
@@ -4061,7 +4457,9 @@ var JotForm = {
                     JotForm.enableDisableField(action.field, isConditionValid);
                 } else if(action.visibility.toLowerCase() == 'disable') {
                     JotForm.enableDisableField(action.field, !isConditionValid);
-                 }
+                } else if(action.visibility.toLowerCase() == 'disablesubmit') {
+                    JotForm.disableSubmitForCard(action, isConditionValid);
+                }
             });
         } else if (condition.type == 'mask') {
             condition.action.each(function (action) {
@@ -4092,7 +4490,20 @@ var JotForm = {
             });
 
         } else if (condition.type == 'calculation') {
-            if (!$("id_" + condition.action[0].resultField)) {
+          var tempResultField = condition.action[0].resultField;
+
+          var tempInput = $("id_" + tempResultField );
+
+          if (tempResultField.indexOf('|') > -1) {
+              var slicedQid = tempResultField.split('|');
+              var qid = slicedQid[0];
+              var fieldId = slicedQid[1];
+
+              tempResultField = 'input_' + qid + '_field_' + fieldId;
+              tempInput = $(tempResultField );
+            }
+
+            if (!tempInput) {
                 return;
             }
 
@@ -4139,14 +4550,25 @@ var JotForm = {
                     }
                 }, 50, calc);
             }
+        } else if (condition.type == 'url') {
+            return (condition.link.toLowerCase() == 'any' && any) || (condition.link.toLowerCase() == 'all' && all);
         } else { // Page condition
 
             if($A(condition.action).length > 0 && condition.action.first().skipHide === 'hidePage') {
                 var action = condition.action.first();
-                if ((condition.link.toLowerCase() == 'any' && any) || (condition.link.toLowerCase() == 'all' && all)) {
-                    JotForm.hidePages[parseInt(action.skipTo.replace('page-', ''), 10)] = true;
+
+                if (window.FORM_MODE == 'cardform') {
+                  if ((condition.link.toLowerCase() == 'any' && any) || (condition.link.toLowerCase() == 'all' && all)) {
+                    JotForm.hideField(action.skipTo);
+                  } else {
+                    JotForm.showField(action.skipTo);
+                  }
                 } else {
+                  if ((condition.link.toLowerCase() == 'any' && any) || (condition.link.toLowerCase() == 'all' && all)) {
+                    JotForm.hidePages[parseInt(action.skipTo.replace('page-', ''), 10)] = true;
+                  } else {
                     JotForm.hidePages[parseInt(action.skipTo.replace('page-', ''), 10)] = false;
+                  }
                 }
                 return;
             }
@@ -4156,11 +4578,41 @@ var JotForm = {
             }
             if ((condition.link.toLowerCase() == 'any' && any) || (condition.link.toLowerCase() == 'all' && all)) {
                 var action = condition.action[0];
-                var sections = $$('.page-section');
-                if (action.skipTo == 'end') {
-                    JotForm.nextPage = sections[sections.length - 1];
+                var sections;
+
+                if (window.FORM_MODE == 'cardform'){
+                  sections = $$('.form-all > .form-line');
                 } else {
-                    JotForm.nextPage = sections[parseInt(action.skipTo.replace('page-', ''), 10) - 1];
+                  sections = $$('.form-all > .page-section');
+                }
+
+                if (window.FORM_MODE == 'cardform') {
+                  if (action.skipTo == 'end') {
+                    JotForm.nextPage = sections[sections.length - 1];
+                  } else {
+                    
+                    var allQuestions = window.CardLayout.layoutParams.allQuestions;
+                    var nextQuestionIndex = allQuestions.findIndex(function(q) { return q.id === action.skipTo;});
+
+                    for(var i = nextQuestionIndex; i < allQuestions.length; i++) {
+                        if(allQuestions[nextQuestionIndex].type === 'control_head') {
+                            nextQuestionIndex++;
+                        }
+                    }
+                    action.skipTo = allQuestions[nextQuestionIndex].id;
+
+                    var next = sections.find(function(section) { return section.id === 'id_' + action.skipTo;});
+                    if (next) {
+                      JotForm.nextPage = sections.find(function(section) { return section.id === 'id_' + action.skipTo;});
+                      JotForm.prevPage = sections.find(function(section) { return section.className.indexOf('form-line-active') > -1;});
+                    }
+                  }
+                } else {
+                  if (action.skipTo == 'end') {
+                      JotForm.nextPage = sections[sections.length - 1];
+                  } else {
+                      JotForm.nextPage = sections[parseInt(action.skipTo.replace('page-', ''), 10) - 1];
+                  }
                 }
 
             } else {
@@ -4178,13 +4630,21 @@ var JotForm = {
     fieldConditions: {},
 
     setFieldConditions: function (field, event, condition) {
-        if (!JotForm.fieldConditions[field]) {
-            JotForm.fieldConditions[field] = {
+        var tempField = '';
+        if (field.indexOf('|') > -1) {
+          var fieldSplit = field.split( '|' );
+          tempField = fieldSplit[0] + '_field_' + fieldSplit[1];
+        } else {
+          tempField = field;
+        }
+
+        if (!JotForm.fieldConditions[tempField]) {
+            JotForm.fieldConditions[tempField] = {
                 event: event,
                 conditions: []
             };
         }
-        JotForm.fieldConditions[field].conditions.push(condition);
+        JotForm.fieldConditions[tempField].conditions.push(condition);
     },
 
     widgetsAsCalculationOperands: [],
@@ -4203,6 +4663,7 @@ var JotForm = {
             if (el.id === 'coupon-input'
                 || (el.type === 'hidden' && !el.up('.form-star-rating') && !el.hasClassName('form-widget'))
                 || el.hasClassName('form-checkbox-other-input') || el.hasClassName('form-radio-other-input')
+                || el.hasClassName('jfModal-input')
                 || $A(['prefix', 'middle', 'suffix', 'addr_line2']).any(function (name) {
                     return el.name.indexOf("[" + name + "]") > -1;
                 })) {
@@ -4218,12 +4679,13 @@ var JotForm = {
                 validations = [];
             }
 
-            if (JotForm.getInputType(qid) == "file" && el.getAttribute("multiple") == "multiple" && el.up('.jf-required')) {
-                el.up('.jf-required').className = el.up('.jf-required').className.replace(/validate\[required\]/gi, '');
+            if (JotForm.getInputType(qid) == "file" && el.getAttribute("multiple") == "multiple" && el.up('[class*=validate[multipleUpload]]')) {
+                var uploadWrapper = el.up('[class*=validate[multipleUpload]]');
+                uploadWrapper.className = uploadWrapper.className.replace(/validate\[required\]/gi, '');
                 if (req) {
-                    el.up('.jf-required').addClassName("validate[required]");
+                    uploadWrapper.addClassName("validate[required]");
                 } else {
-                    el.up('.jf-required').removeClassName("form-validation-error");
+                    uploadWrapper.removeClassName("form-validation-error");
                 }
             }
 
@@ -4380,8 +4842,7 @@ var JotForm = {
                 var opField = ops[i];
                 if (!opField || opField.empty() || !$('id_' + opField)) continue;
 
-                var type = JotForm.calculationType(opField),
-                    ev;
+                var type = JotForm.calculationType(opField), ev;
 
                 switch (type) {
                     case "widget":
@@ -4460,6 +4921,7 @@ var JotForm = {
          'control_stripe',
          'control_paymill',
          'control_payment',
+         'control_paymentwall',
          'control_paypal',
          'control_paypalexpress',
          'control_paypalpro',
@@ -4478,6 +4940,12 @@ var JotForm = {
          'control_firstdata',
          'control_payjunction',
          'control_chargify',
+         'control_cardconnect',
+         'control_echeck',
+         'control_bluesnap',
+         'control_payu',
+         'control_pagseguro',
+         'control_moneris'
         ];
         if ($('id_' + id) && $('id_' + id).readAttribute('data-type') && paymentTypes.include($('id_' + id).readAttribute('data-type'))) {
             return $('id_' + id).readAttribute('data-type').replace("control_", "");
@@ -4489,42 +4957,27 @@ var JotForm = {
     },
 
     checkCalculation: function (calc) {
-
-        if (calc.hasOwnProperty('conditionTrue') && !calc.conditionTrue) {
+        if (!calc.resultField || (calc.hasOwnProperty('conditionTrue') && !calc.conditionTrue)) {
             return '';
         }
 
         var result = calc.resultField;
+        // Check for multiline
+        var mixedResult = false;
+        if(result.indexOf('|') > -1) {
+          mixedResult = 'input_' + result.split('|')[0] + '_field_' + result.split('|')[1];
+        }
         var showBeforeInput = (calc.showBeforeInput && calc.showBeforeInput != "0") ? calc.showBeforeInput : false;
         var ignoreHidden = (calc.ignoreHiddenFields && calc.ignoreHiddenFields != "0") ? calc.ignoreHiddenFields : false;
         var useCommasForDecimals = (calc.useCommasForDecimals && calc.useCommasForDecimals != "0") ? calc.useCommasForDecimals : false;
 
-        if (!$('id_' + result)) return;
+        if (!$('id_' + result) && !$(mixedResult)) return;
         try {
             if (![
-                'text',
-                'email',
-                'textarea',
-                'calculation',
-                'combined',
-                'address',
-                'datetime',
-                'time',
-                'html',
-                'authnet',
-                'paypalpro',
-                'number',
-                'radio',
-                'checkbox',
-                'select',
-                'matrix',
-                'braintree',
-                'stripe',
-                'square',
-                'eway',
-                'bluepay',
-                'firstdata',
-                'chargify',
+                'text', 'email', 'textarea', 'calculation', 'combined', 'address', 'datetime', 'time', 'html', 'authnet', 'paypalpro', 'number', 'radio', 'checkbox',
+                'select', 'matrix', 'widget', 'signature', 'braintree', 'stripe', 'square', 'eway', 'bluepay', 'firstdata', 'chargify', 'echeck', 'payu', 'pagseguro', 'moneris', 'paypal',
+                'dwolla', 'bluesnap', 'paymentwall', 'payment', 'paypalexpress', 'payjunction', '2co', 'cardconnect', 'clickbank', 'onebip', 'worldpay', 'rating', 'hidden',
+                'file', 'other', 'mixed'
                 ].include(JotForm.calculationType(result))) return;
         } catch (e) {
             console.log(e);
@@ -4539,11 +4992,22 @@ var JotForm = {
                 data = data.substring(0, data.indexOf("_"));
             }
 
-            if (!$('id_' + data)) return '';
+            var hasMixedTypeChar = false;
+            if (data.indexOf("|") > -1) {
+              hasMixedTypeChar = true;
+              // subField = data.substring(data.indexOf("|"));
+              // data = data.substring(0, data.indexOf("|"));
+            }
 
-            if (!$('id_' + data).hasClassName('calculatedOperand') && showBeforeInput) return ''; //no input yet so ignore field
-            if (ignoreHidden && ($('id_' + data).hasClassName("form-field-hidden") || ($('id_' + data).up(".form-section") && $('id_' + data).up(".form-section").hasClassName("form-field-hidden")))) {
+            if (hasMixedTypeChar == false) {
+              if (!$('id_' + data)) {
+                return '';
+              }
+
+              if (!$('id_' + data).hasClassName('calculatedOperand') && showBeforeInput) return ''; //no input yet so ignore field
+              if (ignoreHidden && ($('id_' + data).hasClassName("form-field-hidden") || ($('id_' + data).up(".form-section") && $('id_' + data).up(".form-section").hasClassName("form-field-hidden")))) {
                 return numeric ? 0 : '';
+              }
             }
 
             var type = JotForm.calculationType(data);
@@ -4554,7 +5018,7 @@ var JotForm = {
                     if ($("id_" + data).down('.form-radio')) {
                         $$('input[id^="input_'+data+subField+'_"]').each(function (radio) {
                             if (radio.checked) {
-                                val = radio.readAttribute('data-calcvalue') ? radio.readAttribute('data-calcvalue') : radio.value;
+                              val = radio.readAttribute('data-calcvalue') ? radio.readAttribute('data-calcvalue') : radio.value;
                             }
                         });
                     } else {
@@ -4574,23 +5038,54 @@ var JotForm = {
                         }
                     }
                     break;
-                case 'stripe':
-                case 'paymill':
+
+                case 'mixed':
+                  var tempFieldId;
+                  var slicedQid;
+                  var fieldId;
+
+                  if (data.indexOf('|') > -1) {
+                    slicedQid = data.split('|');
+                    questionId = slicedQid[0];
+                    fieldId = slicedQid[1];
+                  }
+
+                  var tempInput = $('input_' + questionId + '_field_' + fieldId);
+
+                  if (tempInput && typeof tempInput.value !== 'undefined') {
+                    val = tempInput.value;
+                  }
+
+                  break;
+
+                case '2co':
+                case 'authnet':
+                case 'bluepay':
+                case 'bluesnap':
+                case 'boxpayment':
+                case 'braintree':
+                case 'cardconnect':
+                case 'chargify':
+                case 'clickbank':
+                case 'dwolla':
+                case 'echeck':
+                case 'eway':
+                case 'firstdata':
+                case 'googleco':
+                case 'moneris':
+                case 'onebip':
+                case 'pagseguro':
+                case 'payjunction':
                 case 'payment':
+                case 'paymill':
                 case 'paypal':
                 case 'paypalexpress':
                 case 'paypalpro':
-                case 'clickbank':
-                case '2co':
-                case 'googleco':
-                case 'worldpay':
-                case 'onebip':
-                case 'authnet':
-                case 'dwolla':
-                case 'braintree':
+                case 'payu':
                 case 'square':
-                case 'eway':
-                case 'bluepay':
+                case 'stripe':
+                case 'wepay':
+                case 'worldpay':
                     if ($("id_" + data).down('#payment_total')) {
                         val = $("id_" + data).down('#payment_total').innerHTML;
                     } else if ($('input_' + data + '_donation')) {
@@ -4599,15 +5094,16 @@ var JotForm = {
                     if(JotForm.currencyFormat && JotForm.currencyFormat.dSeparator === ",") {
                         val = val.replace(/\./g, "").replace(/\,/g, ".");
                     }
-
                     break;
+
                 case 'radio':
                     $$("#id_" + data + ' input[type="radio"]').each(function (rad, i) {
                         if (rad.checked) {
                             if (rad.readAttribute('data-calcvalue')) {
                                 val = rad.readAttribute('data-calcvalue');
                             } else {
-                                if (typeof FormTranslation !== 'undefined' && JotForm.getOptionOtherInput(rad)) {
+                                var otherOption = JotForm.getOptionOtherInput(rad);
+                                if (typeof FormTranslation !== 'undefined' && otherOption && otherOption.innerHTML) {
                                     val = JotForm.getOptionOtherInput(rad).innerHTML;
                                 } else {
                                     val = rad.value;
@@ -4625,7 +5121,7 @@ var JotForm = {
                             if (chk.readAttribute('data-calcvalue')) {
                                 valArr.push(chk.readAttribute('data-calcvalue'));
                             } else {
-                                if (typeof FormTranslation !== 'undefined' && chk.next()) {
+                                if (typeof FormTranslation !== 'undefined' && chk.next() && chk.next().innerHTML) {
                                     valArr.push(chk.next().innerHTML);
                                 } else {
                                     valArr.push(chk.value);
@@ -4651,10 +5147,21 @@ var JotForm = {
                 
                     if (numeric) val = 0;
 
-                    $('input_' + data).select('option').each(function (option, ind) {
-                        var option = $('input_' + data).options[ind];
+                    var tempInput;
+                    if (data.indexOf('|') > -1) {
+                        slicedQid = data.split('|');
+                        var questionId = slicedQid[0];
+                        var fieldId = slicedQid[1];
+
+                        tempInput = $('input_' + questionId + '_field_' + fieldId);
+                    } else {
+                        tempInput = $('input_' + data);
+                    }
+
+                    tempInput.select('option').each(function (option, ind) {
+                        var option = tempInput.options[ind];
                         if (option && option.selected) {
-                            var current = option.readAttribute('data-calcvalue') ? option.readAttribute('data-calcvalue') : optionValue(option);
+                            var current = option.readAttribute('data-calcvalue') && (!calc.hasOwnProperty('insertAsText') || (calc.hasOwnProperty('insertAsText') && (calc.insertAsText == false || calc.insertAsText === '0' ))) ? option.readAttribute('data-calcvalue') : optionValue(option);
                             if(numeric) {
                                 val += (current === "") ? 0 : parseFloat(current.replace(/[^\-0-9.]/g, ""));
                             } else {
@@ -4767,23 +5274,22 @@ var JotForm = {
                     break;
 
                 case 'time':
-                    if (subField == "_duration") {
-                        if ($("duration_" + data + "_ampmRange")) {
-                            if (numeric) {
-                                var duration = $("duration_" + data + "_ampmRange").value;
-                                if (duration.indexOf(":") > -1) {
-                                    var time = duration.split(":");
-                                    var hours = time[0] || 0;
-                                    var mins = time[1] || 0;
-                                    var millis = Date.UTC('1970', '0', '1', hours, mins);
-                                    val = millis / 60 / 60 / 1000;
-                                }
-                            } else {
-                                val = $("duration_" + data + "_ampmRange").value;
+                    if ($('until_'+data) && $("duration_" + data + "_ampmRange")) {
+                        if (numeric) {
+                            var duration = $("duration_" + data + "_ampmRange").value;
+                            if (duration.indexOf(":") > -1) {
+                                var time = duration.split(":");
+                                var hours = time[0] || 0;
+                                var mins = time[1] || 0;
+                                var millis = Date.UTC('1970', '0', '1', hours, mins);
+                                val = millis / 60 / 60 / 1000;
                             }
+                        } else {
+                            val = $("duration_" + data + "_ampmRange").value;
                         }
                         break;
                     }
+
                     var valArr = [];
                     combinedObject = {};
 
@@ -4989,21 +5495,21 @@ var JotForm = {
             }
 
             if (numeric && typeof val !== 'number') {
-                if(useCommasForDecimals) {
-                    if(/\..*\,/.test(val)) { //dot used as units separator before comma
-                        val = val.replace(/\./g, "");
-                    }
-                    val = val.replace(",",".");
+              if(useCommasForDecimals) {
+                if(/\..*\,/.test(val)) { //dot used as units separator before comma
+                  val = val.replace(/\./g, "");
                 }
-                val = val.replace(/-?([^0-9])/g, "$1").replace(/[^0-9\.-]/g, "");
+                val = val.replace(",",".");
+              }
+              val = val.replace(/-?([^0-9])/g, "$1").replace(/[^0-9\.-]/g, "");
             }
 
             if (numeric && val < 0) { //ntw 343248 - this is to patch a weirdness in the parser whereby x+-y will not parse
-                val = '(' + val + ')';
+              val = '(' + val + ')';
             }
 
             if (numeric && val === '') {
-                val = 0;
+              val = 0;
             }
             return val;
         };
@@ -5214,9 +5720,8 @@ var JotForm = {
         if (!(typeof output== "string" && output.length > 1) && parseFloat(output) === 0 && $('input_' + result) && ($('input_' + result).readAttribute('defaultValue') != null || $('input_' + result).readAttribute('data-defaultvalue') != null)) {
             output = $('input_' + result).readAttribute('defaultValue') || $('input_' + result).readAttribute('data-defaultvalue');
         }
-
-        var resultFieldType = calc.isLabel ? "html" : JotForm.calculationType(result);        
-
+        
+        var resultFieldType = calc.isLabel ? "html" : JotForm.calculationType(result);
         switch (resultFieldType) {
             case "html":
                 try {
@@ -5231,17 +5736,47 @@ var JotForm = {
                     if (output.empty() && calc.defaultValue) {
                         output = calc.defaultValue;
                     }
-                    var spans = $$("." + result + "_" + calc.replaceText.replace(":","\\:"));
+
+                    var className = result + "_" + calc.replaceText.replace(/\[/g,"_field_").replace(/\:/g,"_");;
+                    className = className.replace(']', '');
+                    var spans = $$("." + className);
+                    
+                    var subLabel = [];
+                    if (window.FORM_MODE == 'cardform') {
+                      subLabel = $$('.' + 'jfField-sublabel').filter(function(el) { return el.htmlFor == 'input_' + result; });
+                    }
+                    else {
+                      subLabel = $$('.' + 'form-sub-label').filter(function(el) { return el.htmlFor == 'input_' + result; });
+                    }
+
+                    var replaceRegex = calc.replaceText.replace('[','\\[' );
+
+                    var re = new RegExp("\{" + replaceRegex + "\}", "g");
+                    var def = calc.defaultValue || "";
+
+
                     if (spans.length == 0) {
                         var contents = calc.isLabel ? $('label_' + result).innerHTML :  $('text_' + result).innerHTML;
-                        var re = new RegExp("\{" + calc.replaceText + "\(\\[.*?\\]\){0,1}\}", "g");
-                        var def = calc.defaultValue || "";
-                        contents = contents.replace(re, '<span class="replaceTag ' + result + "_" + calc.replaceText + '" default="'+def+'">' + output + '</span>');
+                        contents = contents.replace(re, '<span class="replaceTag ' + className + '" default="'+def+'">' + output + '</span>');
                         calc.isLabel ? $('label_' + result).update(contents) : $('text_' + result).update(contents);
                     } else {
                         spans.each(function (span) {
                             span.update(output);
                         });
+                    }
+
+                    subLabel.each(function (subl){
+                        var content = subl.innerHTML.replace(re, '<span class="replaceTag ' + className + '" default="'+def+'">' + output + '</span>');
+                        subl.update(content);
+                    });
+
+                    var description = $('input_' + result + '_description');
+                    if (description) {
+                        var descriptionContent = description.innerHTML;
+                        if (descriptionContent.indexOf(calc.replaceText) > -1) {
+                          descriptionContent = descriptionContent.replace(re, '<span class="replaceTag ' + className + '" default="'+def+'">' + output + '</span>');
+                          description.update(descriptionContent);
+                        }
                     }
                 } catch (e) {
                     console.log(e);
@@ -5280,9 +5815,20 @@ var JotForm = {
                             var month = JotForm.addZeros(date.getUTCMonth() + 1, 2);
                             var day = JotForm.addZeros(date.getUTCDate(), 2);
 
-                            if (!isNaN(year)) $("year_" + result).value = year;
-                            if (!isNaN(month)) $("month_" + result).value = month;
-                            if (!isNaN(day)) $("day_" + result).value = day;
+
+                            if ($('input_'+result)) {
+                              $('input_'+result).value = year+'-'+month+'-'+day;
+
+                              // set the year, month and date for card forms
+                              if (!isNaN(year)) $$('#cid_'+result+' .jfField[data-type="year"] input')[0].value = year;
+                              if (!isNaN(month)) $$('#cid_'+result+' .jfField[data-type="month"] input')[0].value = month;
+                              if (!isNaN(day)) $$('#cid_'+result+' .jfField[data-type="day"] input')[0].value = day;
+                              
+                            } else {
+                              if (!isNaN(year)) $("year_" + result).value = year;
+                              if (!isNaN(month)) $("month_" + result).value = month;
+                              if (!isNaN(day)) $("day_" + result).value = day;
+                            }
                         }
                     } catch (e) {
                         console.log(e);
@@ -5310,11 +5856,15 @@ var JotForm = {
                 });
                 break;
             case "checkbox":
-                var checks = $$("#id_" + result + ' input[type="checkbox"]');
-                var outputs = output.split(",");
-                outputs = outputs.collect(function (out) {
-                    return out.strip();
+                var sources = $$('#id_'+calc.operands+' input[type="checkbox"]:checked');
+                
+                var outputs = sources.length ? sources.collect(function(out){
+                  return out.value.strip();
+                }) : output.split(',').collect(function(out) {
+                  return out.strip();
                 });
+
+                var checks = $$("#id_" + result + ' input[type="checkbox"]');
                 $A(checks).each(function (chk) {
                     chk.checked = false;
                     if (outputs.include(chk.value)) {
@@ -5323,7 +5873,9 @@ var JotForm = {
                 });
                 break;
             case "select":
-                $('input_' + result).setValue(output.strip());
+                var source = $$('#id_'+calc.operands+' select');
+                var out = (source[0] ? source[0].value : output);
+                $('input_' + result).setValue(out.strip());
                 break;
 
             case "matrix":
@@ -5346,60 +5898,58 @@ var JotForm = {
                 }
                 $('input_' + result).value = output;
                 break;
-
+            case "mixed":
+                if($(mixedResult)) {
+                    $(mixedResult).value = output;
+                    var parent = $(mixedResult).up();
+                    if(window.FORM_MODE == 'cardform' && parent && !parent.hasClassName('isFilled')) {
+                        parent.addClassName('isFilled');
+                    }
+                }
+                break;
             default:
-                if ($('input_' + result).hinted === true) { //IE8&9 make sure inserted value is not hinted
+      
+                if ($('input_' + result) && $('input_' + result).hinted === true) { //IE8&9 make sure inserted value is not hinted
                     $('input_' + result).clearHint();
                 }
+  
+                if ($('input_' + result)) {
+                  $('input_' + result).value = output;
+                }
 
-                $('input_' + result).value = output;
-
-                if (output && output.length === 0 && $('input_' + result).hintClear) { //IE8&9 if value is empty reapply hint
+                if ( $('input_' + result) && output && output.length === 0 && $('input_' + result).hintClear) { //IE8&9 if value is empty reapply hint
                     $('input_' + result).hintClear();
                 }
 
-                if ($('input_' + result).readAttribute("data-masked") == "true") {
+                if ($('input_' + result) && $('input_' + result).readAttribute("data-masked") == "true") {
                     JotForm.setQuestionMasking("#input_" + result, "textMasking", $('input_' + result).readAttribute("maskValue"));
                 }
-                // trigger value change
-                if (JotForm.donationField && JotForm.donationField.getAttribute('data-custom-amount-field') == result) {
-                    $('input_' + result).triggerEvent('change');
-                }
+                break;
         }
 
         var infiniteLoop = function () {
-            // prevent calculation&condition infinite loop by limiting the nuber of times
-            // a calculation can be run on an element in a 500ms period
-            var timestamp = new Date().getTime();
-            var msPart = timestamp % 1000;
-            if (msPart < 500) {
-                msPart = "0";
-            } else {
-                msPart = "1";
-            }
-            var secPart = parseInt(timestamp / 1000);
-            var antiLoopKey = 'input_' + result + '-' + secPart + '-' + msPart;
+
+            var checkVal = typeof output === 'object' ? JSON.stringify(output) : output;
+            var checkField = calc.resultSubField||calc.resultField;
 
             //create global antiLoop variable if not created yet
             if (!("__antiLoopCache" in window)) {
                 window.__antiLoopCache = {};
             }
-            if (antiLoopKey in window.__antiLoopCache) {
-                window.__antiLoopCache[antiLoopKey]++;
-                if (window.__antiLoopCache[antiLoopKey] > 9) {
-                    return true; //only allow same calc to trigger nine times in half a second - multiple are needed for things like sliders that change quickly
-                }
-            } else {
-                window.__antiLoopCache[antiLoopKey] = 1;
+            if (window.__antiLoopCache[checkField] === checkVal) {
+                return true;
             }
-            return false; //not infinite loop
+
+            window.__antiLoopCache[checkField] = checkVal;
+
+            return false;
         }
 
         if (infiniteLoop()) {
             return;
         }
 
-        if ($('id_' + result).hasClassName("form-line-error")) {
+        if (!mixedResult && $('id_' + result).hasClassName("form-line-error")) {
             $('id_' + result).select("select[class*='required'], textarea[class*='required'], input[class*='required']").each(function (el) {
                 if (el.validateInput) {
                     el.validateInput();
@@ -5420,7 +5970,11 @@ var JotForm = {
             }
         } else {
             eventType = "keyup";
-            triggerMe = $('input_' + result) ? $('input_' + result) : $('id_' + result).select('input').first();
+            if($(mixedResult)) {
+                triggerMe = $(mixedResult);
+            } else {
+                triggerMe = $('input_' + result) ? $('input_' + result) : $('id_' + result).select('input').first();
+            }
         }
 
         if (!triggerMe) return;
@@ -5504,7 +6058,16 @@ var JotForm = {
 
                     var fields = [];
                     $A(condition.terms).each(function (term) {
-                        fields.push(term.field);
+                      term.field = String(term.field);
+                      var tempField = '';
+                      if (term.field.indexOf('|') > -1) {
+                        var fieldSplit = term.field.split( '|' );
+                        tempField = fieldSplit[0] + '_field_' + fieldSplit[1];
+                      } else {
+                        tempField = term.field;
+                      }
+
+                      fields.push(tempField);
                         var otherFieldRef = JotForm.getFieldIdFromFieldRef(term.value)
                         if(otherFieldRef) {
                             fields.push(otherFieldRef);
@@ -5512,8 +6075,8 @@ var JotForm = {
                     });
 
                     $A(fields).each(function (id) {
-
-                        switch (JotForm.getInputType(id)) {
+                        var inputTypeTemp = JotForm.getInputType(id);
+                        switch (inputTypeTemp) {
                             case "widget":
                             case "signature":
                                 JotForm.setFieldConditions('input_' + id, 'change', condition);
@@ -5521,7 +6084,11 @@ var JotForm = {
                                 break;
                             case "combined":
                             case "email":
-                                JotForm.setFieldConditions('id_' + id, 'autofill', condition);
+                                if (id.indexOf('_field_') > -1) {
+                                  JotForm.setFieldConditions('input_' + id, 'autofill', condition);
+                                } else {
+                                  JotForm.setFieldConditions('id_' + id, 'autofill', condition);
+                                }
                                 break;
                             case "address":
                                 JotForm.setFieldConditions('id_' + id, 'autofill', condition);
@@ -5572,6 +6139,28 @@ var JotForm = {
                                     JotForm.setFieldConditions('input_' + id, 'keyup', condition);
                                 }
                                 break;
+                            case "mixed":
+                                if (id.indexOf('_field_') > -1) {
+                                    var idSplit = id.split('_field_');
+                                    var tempQid = idSplit[0];
+
+                                    var tempQuestion;
+                                    // If we can
+                                    this.CardLayout.layoutParams.allQuestions.forEach(function (question) {
+                                        if (question.id == tempQid) {
+                                          tempQuestion = question;
+                                        }
+                                    });
+
+                                    if (tempQuestion && tempQuestion.fields) {
+                                        tempQuestion.fields.forEach( function (field) {
+                                        var tempSelector = 'input_' + tempQid + '_field_' + field.fieldID;
+                                          JotForm.setFieldConditions(tempSelector, 'change', condition);
+                                          JotForm.widgetsWithConditions.push(tempSelector);
+                                        });
+                                    }
+                                }
+                              break;
 
                             default: // text, textarea, dropdown
                                 JotForm.setFieldConditions('input_' + id, 'keyup', condition);
@@ -5594,6 +6183,10 @@ var JotForm = {
                         var highestPage = false;
                         $A(condition.terms).each(function (term) {
                             var id = term.field.toString();
+                            if (!$('id_'+id)) {
+                              return;
+                            }
+                            
                             if (id.indexOf("_") !== -1) {
                                 id = id.split("_")[0];
                             }
@@ -5622,11 +6215,33 @@ var JotForm = {
                                 id = id.split("_")[0];
                             }
 
+                            // if element is a multiline
+                            if (id.indexOf("|") !== -1) {
+                              id = id.split("|")[0];
+                            }
+
                             if(!$('id_' + id)) {
                                 return;
                             }
 
-                            var nextButton = JotForm.getSection($('id_' + id)).select('.form-pagebreak-next')[0];
+                            if($('id_' + id).getAttribute('data-type') === 'control_widget'){
+                              if($('input_' + id) && $('input_' + id).type === 'hidden' && $$("#jfCard-welcome-start")){
+                                 var startButton = $$("#jfCard-welcome-start").first();
+                                 if(startButton){
+                                  startButton.observe('mousedown', function(){
+                                     JotForm.checkCondition(condition);
+                                   });
+                                }
+                              }
+                            }
+
+                            var nextButton;
+                            if(window.FORM_MODE === 'cardform') {
+                              nextButton = $('id_' + id).select('.forNext')[0];
+                            } else {
+                              nextButton = JotForm.getSection($('id_' + id)).select('.form-pagebreak-next')[0];
+                            }
+
                             if (!nextButton) {
                                 return;
                             }
@@ -5711,13 +6326,13 @@ var JotForm = {
 
     /**
      * Sets field values to be duplicated before encryption
-     * These fields are needed by some payment gateways
+     * These fields are needed by some payment gateways, integrations, and email-type conditions
      * for example, braintree gets the first email field on the form
-     * but it should be unencrypted, so we duplicate the fields
+     * but it should be unencrypted, so we duplicate the original value
      * before encryption (at JotForm.encryptAll)
      */
 
-    setFieldsToPreserve: function (param) {
+    setFieldsToPreserve: function (preset) {
 
         // gateways that need these fields
         var gateways = [
@@ -5732,7 +6347,7 @@ var JotForm = {
 
         var getPaymentFields = $$('input[name="simple_fpc"]').length > 0 && gateways.indexOf($$('input[name="simple_fpc"]')[0].getAttribute('data-payment_type')) > -1;
 
-        var additionalPaymentFields = [{
+        var paymentExtras = [{
             type: "phone",
             pattern: /Phone|Contact/i
         }, {
@@ -5743,47 +6358,48 @@ var JotForm = {
             pattern: /company|organization/i
         }];
 
-        var fields = $$('.form-line[data-type*="email"], .form-line[data-type*="textbox"], .form-line[data-type*="phone"]');
+        var eligibleFields = $$('.form-line[data-type*="email"],' +
+            '.form-line[data-type*="textbox"],' +
+            '.form-line[data-type*="phone"],' +
+            '.form-line[data-type*="dropdown"],' +
+            '.form-line[data-type*="radio"]');
         // arrange all fields by id
-        sortedFields = fields.sort(function (a, b) {
+        sortedFields = eligibleFields.sort(function (a, b) {
             return Number(a.id.replace("id_", "")) - Number(b.id.replace("id_", ""));
         });
 
-        var fieldsToPreserve = {};
-        // get the first field that matches the regex and type
+        var paymentFieldsToPreserve = {}; // holder for payment fields (max 3; see paymentExtras)
+        // collect fields whose values need to be duplicated prior to encryption
         sortedFields.each(function (field) {
-            if (Object.keys(fieldsToPreserve).length == 3) {
-                throw $break;
-            }
-
             var fieldId = field.id.replace('id_', '');
-            var fieldTag = field.down('input').name.replace(/q\d+_/, "");
+            var fieldName = field.down('input, select').name.replace(/q\d+_/, "");
             var fieldType = field.getAttribute('data-type').replace('control_', '');
-
-            if (getPaymentFields) {
-                additionalPaymentFields.each(function (reg) {
+            // find and match payment extras (total of 3; email, phone, company)
+            if (getPaymentFields && Object.keys(paymentFieldsToPreserve).length < 3) {
+                paymentExtras.each(function (extra) {
                     /*
                      valid form field type
                      email =>  email and textbox
                      phone =>  phone field and textbox
                      company => textbox only
                      */
-                    if (fieldType == 'textbox' || fieldType == reg.type) {
-
+                    if (fieldType == 'textbox' || fieldType == extra.type) {
                         var label = field.down('label').innerHTML.strip();
-
-                        if (reg.pattern.exec(label) && !fieldsToPreserve[reg.type]) {
-                            fieldsToPreserve[reg.type] = fieldId;
-                            JotForm.fieldsToPreserve.push(fieldId);
+                        if (extra.pattern.exec(label) && !paymentFieldsToPreserve[extra.type]) {
+                            paymentFieldsToPreserve[extra.type] = fieldId;
+                            if (JotForm.fieldsToPreserve.indexOf(fieldId) === -1) {
+                                JotForm.fieldsToPreserve.push(fieldId);
+                            }
                         }
                     }
                 });
             }
-
-            if (param) {
-                if (param.indexOf(fieldTag) > -1) {
-                    JotForm.fieldsToPreserve.push(fieldId);
-                }
+            // preset is an array of question ids and/or question names set at build_source.js
+            // if it matches eligible fields on the form, add it to the list
+            if (preset && JotForm.fieldsToPreserve.indexOf(fieldId)
+                && (preset.indexOf(fieldName) > -1 || preset.indexOf(fieldId) > -1))
+            {
+                JotForm.fieldsToPreserve.push(fieldId);
             }
         });
     },
@@ -5808,7 +6424,7 @@ var JotForm = {
             $('subtotal-text').innerHTML = text.totalSubtotal;
         }
         if ($('total-text') && text.totalTotal) {
-            $('total-text').innerHTML = text.totalTotal;
+            $('total-text').innerHTML = text.totalTotal ;
         }
     },
 
@@ -5880,6 +6496,9 @@ var JotForm = {
         JotForm.paymentTotal = donationField.value || 0;
         // observe changes
         donationField.observe('keyup', function () {
+            JotForm.paymentTotal = this.value = this.value.replace(/[^.0-9]+/g, "");
+        });
+        donationField.observe('change', function () {
             JotForm.paymentTotal = this.value;
         })
         // if donation gets its amount from a calculation widget
@@ -5896,12 +6515,8 @@ var JotForm = {
                 donationField.triggerEvent('keyup');
             }, 1000);
             // observe calc widget value changes
-            JotForm.donationSourceField.observe('change', function () {
-                // do not update if donation field is hidden by condition
-                // it will be updated when shown again (JotForm.showField)
-                if (donationField.up('.form-line.form-field-hidden') || donationField.up('ul.form-field-hidden')) { return; }
-                JotForm.updateDonationAmount();
-            });
+            JotForm.donationSourceField.observe('keyup', JotForm.updateDonationAmount);
+            JotForm.donationSourceField.observe('change', JotForm.updateDonationAmount);
         // if donation field requires a minimum amount
         } else if (donationField.hasAttribute('data-min-amount')) {
             var currency = donationField.nextSibling.textContent.strip();
@@ -5923,10 +6538,12 @@ var JotForm = {
      * @param amount
      */
     updateDonationAmount: function (amount) {
-        // source field is missing
-        if (!JotForm.donationSourceField) { return; }
+        if (!JotForm.donationSourceField // source field is missing
+            || JotForm.donationField.up('.form-line.form-field-hidden') // skip if hidden by condition; it will be updated when shown again (JotForm.showField)
+            || JotForm.donationField.up('ul.form-field-hidden'))
+        { return; }
         // amount is specified
-        if (typeof amount !== 'undefined') {
+        if (['undefined', 'object'].indexOf(typeof amount) === -1) {
             JotForm.donationField.value = JotForm.paymentTotal = amount;
             return;
         }
@@ -5938,6 +6555,10 @@ var JotForm = {
             return !isNaN(val) && val > 0 ? val : 0;
         }
         JotForm.donationField.value = JotForm.paymentTotal = getVal();
+
+        if(window.FORM_MODE && window.FORM_MODE == 'cardform') {
+            JotForm.donationField.parentNode.addClassName('isFilled');
+        }
     },
 
     /**
@@ -6115,8 +6736,7 @@ var JotForm = {
 
     handleBraintree: function () {
         // skip on edit mode
-        if (["edit", "inlineEdit", "submissionToPDF"].indexOf(document.get.mode) > -1
-            && document.get.sid) {
+        if (window.location.pathname.match(/^\/edit/) || (["edit", "inlineEdit", "submissionToPDF"].indexOf(document.get.mode) > -1 && document.get.sid)) {
             return;
         }
         if (typeof __braintree !== "function") {
@@ -6124,14 +6744,27 @@ var JotForm = {
             location.reload();
             return;
         }
-        var JF_braintree = __braintree();
-        JF_braintree.init();
+        JotForm.braintree = __braintree();
+        JotForm.braintree.init();
+    },
+  
+    handlePagseguro: function () {
+      // skip on edit mode
+      if (window.location.pathname.match(/^\/edit/) || (["edit", "inlineEdit", "submissionToPDF"].indexOf(document.get.mode) > -1 && document.get.sid)) {
+        return;
+      }
+      if (typeof __pagseguro !== "function") {
+        alert("PagSeguro payment script didn't work properly. Form will be reloaded");
+        location.reload();
+        return;
+      }
+      JotForm.pagseguro = __pagseguro();
+      JotForm.pagseguro.init();
     },
 
     handleSquare: function () {
         // skip on edit mode
-        if (["edit", "inlineEdit", "submissionToPDF"].indexOf(document.get.mode) > -1
-            && document.get.sid) {
+        if (/*JotForm.paidSubmission && */(window.location.href.match(/mode=inlineEdit/) || window.location.pathname.match(/^\/\/edit/) || window.location.pathname.match(/^\/edit/) || window.location.href.match(/mode=submissionToPDF/)) && document.get.sid) { // ["edit", "inlineEdit", "submissionToPDF"].indexOf(document.get.mode) > -1 does not work, JotForm.paidSubmission is unreachable from here (set in form.edit.mode.js)
             return;
         }
 
@@ -6144,12 +6777,12 @@ var JotForm = {
         }
 
         if (typeof __square !== "function") {
-            alert("Squre payment script didn't work properly. Form will be reloaded");
+            alert("Square payment script didn't work properly. Form will be reloaded");
             location.reload();
             return;
         }
-        var JF_square = __square();
-        JF_square.init();
+        JotForm.squarePayment = __square();
+        JotForm.squarePayment.init();
     },
 
     /**
@@ -6235,6 +6868,8 @@ var JotForm = {
                     optionValues[el.id].each(function (vv) {
                         // pause calculation functions to avoid potential browser crash
                         $(vv[0]).stopObserving();
+                        $$("#" + vv[0] + ".form-product-custom_quantity").each(function(el, i){el.observe('blur', function(){isNaN(this.value) || this.value < 1 ? this.value = '0' : this.value})}); // Add event listeners again when re-opening the sub products
+                        $$("#" + vv[0] + ".form-product-custom_quantity").each(function(el, i){el.observe('focus', function(){this.value == 0 ? this.value = '' : this.value})});;
                         if ($(vv[0]).tagName === "SELECT") {
                             $(vv[0]).selectOption(vv[1]);
                         } else {
@@ -6299,10 +6934,11 @@ var JotForm = {
         }
 
         var total = 0;          // total for the whole payment field
-        var subTotal = 0;       // subtotal for all items selected, excluding shipping or taxes
-        var itemSubTotal = [];  // subtotal for a group of subproducts
+        var subTotal = 0;       // subTotal for all items selected, excluding shipping or taxes
+        var itemSubTotal = [];  // subTotal for a group of subproducts
         var shippingTotal = 0;  // total shipping cost
         var taxTotal = 0;       // total tax cost
+        var otherTotal = 0;     // shipping and tax total
         var taxRate = 0;        // uniform tax rate (percentage) for the non-exempted products
         var decimal = JotForm.currencyFormat.decimal; // number of decimal places to use
         var dSeparator = JotForm.currencyFormat.dSeparator;
@@ -6314,14 +6950,18 @@ var JotForm = {
 
             if (pair.value.price == "custom") {
                 if ($(pair.key).checked) {
-                    total = $(pair.key + '_custom_price').getValue();
+                    subTotal = parseFloat($(pair.key + '_custom_price').getValue());
                 }
                 return;
             }
-
-            if (pair.value.quantityField && !(parseInt($(pair.value.quantityField).getValue()) > 0)) {
-                return;
+            
+            if ($(pair.value.quantityField)) {
+              if (pair.value.quantityField && !(parseInt($(pair.value.quantityField).getValue()) > 0)) {
+                // skip calculation if quantity is zero and is not a subproduct
+                if (!$(pair.value.quantityField).hasClassName('form-subproduct-quantity')) { return; }
+              }
             }
+            
             var isSetupFee = pair.value.recurring ? true : false; // is there a setup fee for this subscription?
             var isStripe = typeof Stripe === "function";    // is this a stripe payment field
             total = parseFloat(total);                  // total for the whole payment field
@@ -6339,7 +6979,7 @@ var JotForm = {
                 parentProductKey = pair.key.split('_');
                 parentProductKey.pop();
                 parentProductKey = parentProductKey.join("_");
-                // initalize item subtotal for this subproduct group
+                // initalize item subTotal for this subproduct group
                 itemSubTotal[parentProductKey] = itemSubTotal[parentProductKey] || 0;
             } else {
                 parentProductKey = pair.key;
@@ -6400,35 +7040,13 @@ var JotForm = {
                             recur = recur - ( ( discount[1] === 'fixed' ) ? discount[0] : recur * ( discount[0] / 100 ) );
                             recur = recur < 0 ? 0 : recur;
                         }
-                        // if this is Stripe and there is a setup fee
-                        if (isStripe && isSetupFee) {
-                            // calculate setup fee
-                            var setupFee = price - recur;
-                            setupFee = setupFee - ( ( discount[1] === 'fixed' ) ? discount[0] : setupFee * ( discount[0] / 100 ) );
-                            setupFee = setupFee < 0 ? 0 : setupFee;
-                            price = Number(recur) + Number(setupFee);
-                        } else {
-                            // calculate recurring price
-                            price = price - ( ( discount[1] === 'fixed' ) ? discount[0] : price * ( discount[0] / 100 ) );
-                            price = price < 0 ? 0 : price;
-                        }
+                        // calculate recurring price
+                        price = price - ( ( discount[1] === 'fixed' ) ? discount[0] : price * ( discount[0] / 100 ) );
+                        price = price < 0 ? 0 : price;
                     } else if (discount[2] === "first") {
                         if (isSetupFee) {
-                            if (isStripe) {
-                                /**
-                                 * Neil: Stripe is a special case since their api does not offer a setup fee, so we do a separate charge for the setup fee
-                                 * So first payment = recurring charge + separate charge
-                                 * Therefore subscription discount for first payment actually applies only to the setup fee (first payment - recurring charge))
-                                 */
-                                var setupFee = price - recur;
-                                setupFee = setupFee - ( ( discount[1] === 'fixed' ) ? discount[0] : setupFee * ( discount[0] / 100 ) );
-                                setupFee = setupFee < 0 ? 0 : setupFee;
-                                price = Number(recur) + Number(setupFee);
-
-                            } else {
-                                price = price - ( ( discount[1] === 'fixed' ) ? discount[0] : price * ( discount[0] / 100 ) );
-                                price = price < 0 ? 0 : price;
-                            }
+                            price = price - ( ( discount[1] === 'fixed' ) ? discount[0] : price * ( discount[0] / 100 ) );
+                            price = price < 0 ? 0 : price;
                         }
                     } else if (discount[2] === "stripe_native") {
                         // if native stripe coupon is used and there is a setup fee
@@ -6509,8 +7127,8 @@ var JotForm = {
             if (pair.value.addons) {
                 price += pair.value.addons;
             }
-
-            if ($(pair.key).checked) {
+            
+            if ($(pair.key) && $(pair.key).checked) {
 
                 products++;
 
@@ -6526,12 +7144,12 @@ var JotForm = {
                         }
                     }
 
-                    // if this is a subproduct, add the price to the subtotal
+                    // if this is a subproduct, add the price to the subTotal
                     if (subproduct) {
                         itemSubTotal[parentProductKey] += price;
                     }
 
-                    // update item subtotal if available
+                    // update item subTotal if available
                     if ($(parentProductKey + '_item_subtotal') && !isNaN(price)) {
                         if (!subproduct) {
                             $(parentProductKey + '_item_subtotal').update(parseFloat(price).formatMoney(decimal, dSeparator, tSeparator));
@@ -6568,7 +7186,7 @@ var JotForm = {
                     shippingTotal += productShipping;  // accumulate shipping total
                 }
                 subTotal += price; // accumulate total for all items, without shipping/discount/tax
-                total += price + productShipping + taxAmount;   // overall total
+                otherTotal += productShipping + taxAmount;   // shipping and tax total
 
             } else {
                 if ($(pair.key + '_item_subtotal')) {
@@ -6576,20 +7194,14 @@ var JotForm = {
                 }
             }
         });
-        // add flat rate shipping to total if available
-        total = flatShipping > 0 ? total + flatShipping : total;
-
-        if (total === 0 || isNaN(total)) {
-            total = "0.00";
-        }
         if ($('coupon-button')) {
             var couponInput = $($('coupon-button').getAttribute('data-qid') + '_coupon');
         }
-        // if there is a total discount
+        // if there is a (sub)total discount
         if (JotForm.discounts.total) {
-            if (total >= minimum) {
-                var reduce = type === "fixed" ? rate : (rate / 100) * parseFloat(total);
-                total = total > reduce ? total - reduce : 0;
+            if (subTotal >= minimum) {
+                var reduce = type === "fixed" ? rate : (rate / 100) * parseFloat(subTotal);
+                subTotal = subTotal > reduce ? subTotal - reduce : 0;
                 couponInput.value = code;
             } else {
                 reduce = 0;
@@ -6597,10 +7209,18 @@ var JotForm = {
                 couponInput.value = '';
             }
             // insert discount indicator
-            $$('.form-payment-total')[0].insert({'top': JotForm.discounts.container});
-            $('discount_total').update(parseFloat(reduce).formatMoney(decimal, dSeparator, tSeparator));
+            var paymentTotal = document.querySelector('.form-payment-total');
+            if (paymentTotal) {
+                paymentTotal.parentNode.insertBefore(JotForm.discounts.container, paymentTotal);
+                $('discount_total').update(parseFloat(reduce).formatMoney(decimal, dSeparator, tSeparator));
+            }
         }
-
+        total = subTotal + otherTotal; // combine all totals
+        // add flat rate shipping to total if available
+        total = flatShipping > 0 ? total + flatShipping : total;
+        if (total === 0 || isNaN(total)) {
+            total = "0.00";
+        }
         // if there is a shipping discount
         if (JotForm.discounts.shipping && shippingTotal > 0 && subTotal >= minimum) {
             var reduce = type === "fixed" ? rate : (rate / 100) * parseFloat(shippingTotal);
@@ -6616,7 +7236,7 @@ var JotForm = {
             // if total is zero and a valid coupon has been entered
             if (products > 0 && this.paymentTotal === 0 && discounted) {
                 JotForm.setCreditCardVisibility(false);                
-            } else if ($$('input[id*="paymentType_credit"]')[0].checked) {
+            } else if ($$('input[id*="paymentType_credit"]').length > 0 && $$('input[id*="paymentType_credit"]')[0].checked) {
                 JotForm.setCreditCardVisibility(true);
             }
         }
@@ -6639,6 +7259,10 @@ var JotForm = {
             if ($("payment_total").up(".form-line") && $("payment_total").up(".form-line").triggerEvent) {
                 $("payment_total").up(".form-line").triggerEvent("keyup");  //b#520074 trigger calculation
             }
+        }
+
+        if ($("payment_footer_total")) {
+          $("payment_footer_total").update(parseFloat(total).formatMoney(decimal, dSeparator, tSeparator));
         }
     },
     prices: {},
@@ -6683,10 +7307,11 @@ var JotForm = {
         // count total price upon loading the form (Bug:168425)
         document.observe('dom:loaded', JotForm.countTotal(prices));
         $H(prices).each(function (pair) {
-            $(pair.key).observe('click', function () {
+            if ($(pair.key)) {
+              $(pair.key).observe('click', function () {
                 JotForm.countTotal(prices);
-            });
-
+              });
+            }
             // if this is a subscription with custom pricing
             if (pair.value.price == "custom") {
                 $(pair.key + '_custom_price').stopObserving('keyup'); // prevent stacking of listeners
@@ -6742,7 +7367,17 @@ var JotForm = {
                             || $(pair.value.quantityField).getSelected().index > 0
                             || $(pair.value.quantityField).getValue() === "0") // also trigger uncheck when value is "0"
                         {
-                            $(pair.key).checked = !($(pair.value.quantityField).getValue() <= 0) ? true : false;
+                            var productWithSubProducts = $(pair.value.quantityField).up('.form-product-item').down('.form-product-has-subproducts');
+                            if (productWithSubProducts) {
+                                productWithSubProducts.checked = false;
+                                $H(prices).each(function(pr) {
+                                    if (pr.key.indexOf(productWithSubProducts.id) !== -1 && !($(pr.value.quantityField).getValue() <= 0)) {
+                                        productWithSubProducts.checked = true;
+                                    }
+                                })
+                            } else {
+                                $(pair.key).checked = !($(pair.value.quantityField).getValue() <= 0) ? true : false;
+                            }
                         }
                         JotForm.countTotal(prices);
                     }
@@ -6832,6 +7467,7 @@ var JotForm = {
                             coupon: ci.value,
                             formID: formID,
                             stripe: isStripe,
+                            editMode: JotForm.isEditMode(),
                             paymentID: $$('input[name="simple_fpc"]')[0].value
                         },
                         evalJSON: 'force',
@@ -6844,6 +7480,8 @@ var JotForm = {
                                     } else {
                                         cm.innerHTML = $this.paymentTexts.couponInvalid;
                                     }
+                                    cm.removeClassName('valid');
+                                    cm.addClassName('invalid');
                                     ci.select();
                                     cl.hide();
                                     cb.show();
@@ -6852,6 +7490,8 @@ var JotForm = {
                                     cl.hide();
                                     cb.show();
                                     cm.innerHTML = $this.paymentTexts.couponValid;
+                                    cm.removeClassName('invalid')
+                                    cm.addClassName('valid');
                                     JotForm.applyCoupon(t.message);
                                 }
                             }
@@ -6887,11 +7527,12 @@ var JotForm = {
         cb.innerHTML = this.paymentTexts.couponChange || 'Change';
         // When 'Change' button is clicked
         cb.observe('click', function () {
+            if (JotForm.isEditMode()) { return; }
             // Clear hidden coupon input value
             cf.value = '';
             // Remove all original prices
-            oldPrice.each(function (op) {
-                op.remove();
+            $H(oldPrices).each(function (pair) {
+                pair[1].remove();
             });
             // Remove "Discount" indicator container if present
             if (JotForm.discounts.container) {
@@ -6913,7 +7554,16 @@ var JotForm = {
             ci.select();
             JotForm.handleCoupon();
         });
-        var pair = [], oldPrice = [];
+        var pair = [], oldPrices = {};
+        var displayOldPrice = function (container, id) {
+            oldPrices[id] = new Element('span');
+            var span = new Element('span', {style: 'text-decoration:line-through'});
+            span.insert(container.innerHTML.replace("price", "price_old"));
+            oldPrices[id].insert({top: '&nbsp'});
+            oldPrices[id].insert(span);
+            oldPrices[id].insert({bottom: '&nbsp'});
+            container.insert({top: oldPrices[id]});
+        }
         // if this discount applies to product/subscription items
         // and discount applies to ALL items
         if (discount.products && discount.products.length > 0) {
@@ -6938,23 +7588,16 @@ var JotForm = {
                     });
 
                     if ($$('label[for*="' + pid + '"] span.form-product-details b')[0]) {
-                        var priceContainer = $$('label[for*="' + pid + '"] span.form-product-details b')[0];
-                        /*  The original price will be decreased by countTotal
-                         *  The lines below will copy the unmodified original price and insert it before
-                         *  the discounted price
-                         */
-                        oldPrice[pid] = new Element('span');
-                        var span = new Element('span', {style: 'text-decoration:line-through'});
-                        span.insert(priceContainer.innerHTML.replace("price", "price_old"));
-                        oldPrice[pid].insert({top: '&nbsp'});
-                        oldPrice[pid].insert(span);
-                        oldPrice[pid].insert({bottom: '&nbsp'});
-                        priceContainer.insert({top: oldPrice[pid]});
+                        displayOldPrice($$('label[for*="' + pid + '"] span.form-product-details b')[0], pid);
+                    }
+                    // for subproducts
+                    if ($$('[id*=' + pid + '_subproducts]').length > 0 && $$('[id*=' + pid + '_subproducts]')[0].down('.form-product-child-price')) {
+                        $$('#' + $$('[id*=' + pid + '_subproducts]')[0].id + ' .form-product-child-price').each(function (field, id) {
+                            displayOldPrice(field, pid + '_' + id);
+                        });
                     }
                 });
             } else if (discount.apply === "total") {
-                // if discount is for order total (excluding tax, shipping, etc)
-                var discountHTML = $$('.form-payment-total b')[0].innerHTML.replace('Total:', 'Discount:').replace('payment_total', 'discount_total').replace('<span>', '<span> - ');
                 // if this is a discount for the order total
                 // add discount properties to JotForm.discounts
                 // to be evaluated by countTotal
@@ -6963,9 +7606,14 @@ var JotForm = {
                     code: discount.code,
                     minimum: discount.minimum,
                     type: discount.type,
-                    rate: discount.rate,
-                    container: new Element('span').insert(discountHTML + '<br><br>').setStyle({fontSize: '10px'})
+                    rate: discount.rate
                 };
+                // if discount is for order total (excluding tax, shipping, etc)
+                var totalContainer = document.querySelector('.form-payment-total');
+                if (totalContainer) {
+                    var discountHTML = totalContainer.innerHTML.replace('Total:', 'Discount:').replace('payment_total', 'discount_total').replace('<span>', '<span> - ');
+                    JotForm.discounts.container = new Element('span', { 'class': 'form-payment-discount' }).insert(discountHTML);
+                }
             } else {
                 JotForm.discounts = {
                     shipping: true,
@@ -7032,7 +7680,6 @@ var JotForm = {
             typeof _StripeValidation === 'function'
         ) {
             var clean_pubkey = pubkey.replace(/\s+/g, '');
-            console.log(clean_pubkey);
             if (clean_pubkey == '') {
                 console.log('Stripe publishable key is empty. You need to connect your form using Stripe connect.');
                 return;
@@ -7087,15 +7734,12 @@ var JotForm = {
                 }
             }
 
-            var a = new Ajax.Jsonp(JotForm.server, {
-                parameters: {
-                    action: 'getCaptchaId'
-                },
+            var a = new Ajax.Jsonp("https://www.jotform.com/captcha", {
                 evalJSON: 'force',
                 onComplete: function (t) {
                     t = t.responseJSON || t;
                     if (t.success) {
-                        $(id + '_captcha').src = 'https://www.jotform.com/server.php?action=getCaptchaImg&code=' + t.num;
+                        $(id + '_captcha').src = t.img;
                         $(id + '_captcha_id').value = t.num;
                     }
                 }
@@ -7471,7 +8115,9 @@ var JotForm = {
                         var formID = $$('form').first().readAttribute('id') + $$('form').first().readAttribute('name');
                         var autoFillInstance = AutoFill.getInstance(formID);
                         if (autoFillInstance) {
-                            autoFillInstance.saveAllData()
+                          if(window.location.href.indexOf('jotform.pro') === -1){
+                            autoFillInstance.saveAllData(); // Work only in PROD
+                          }
                         }
 
                     }, 40);
@@ -7593,21 +8239,20 @@ var JotForm = {
                     if (el.hasClassName("form-textarea") && "nicEditors" in window) { //"nicEditors" in window added for somehow if this check fails, do not give errors
                         $$("#cid_" + el.id.split("_")[1] + " > div:nth-child(1)").each(function (tmpel) {
                             if (tmpel.readAttribute("unselectable") == "on") {
-                                for (var i = 0; i < nicEditors.editors.length; i++) {
-                                    nicEditors.editors[i].nicInstances[0].saveContent();
-                                }
-                                //update richtext value
-                                $$("#cid_" + el.id.split("_")[1] + " > div").each(function (richtextdivs) {
-                                    richtextdivs.hide();
-                                    hidden_nicedits_arr.push(richtextdivs); //push hidden divs to hidden_nicedits_arr to be later shown
+                                // hide toolbar
+                                $$("#cid_" + el.id.split("_")[1] + " > div")[0].hide();
+                                // add border to text div
+                                $$("#cid_" + el.id.split("_")[1] + " > div")[1].setStyle({
+                                    borderTopStyle: 'solid',
+                                    borderWidth: '1px',
+                                    borderTopColor: 'rgb(204, 204, 204)'
                                 });
+                                hidden_nicedits_arr.push($$("#cid_" + el.id.split("_")[1] + " > div")[0]); // push editor toolbars to hidden divs to be later shown
                                 nicedit_textarea_to_hide.push(el);// push textarea of nicedit, to be later hidden, because after print process completes we show all textareas by default
                             }
                         });
                     }
                     //nicedit compatibility end
-
-
                     /*el.insert({
                      before: new Element('div', {
                      className: 'print_fields'
@@ -7617,13 +8262,13 @@ var JotForm = {
                 window.print();
 
                 /*$$('.form-textarea, .form-textbox, .date-separate').invoke('show');
-
-                 //nicedit compatibility start: also show hidden richtextEditor divs and hide richtextEditor textareas start
-                 for(var i=0; i<hidden_nicedits_arr.length;i++){hidden_nicedits_arr[i].show();}
-                 for(var i=0; i<nicedit_textarea_to_hide.length;i++){nicedit_textarea_to_hide[i].hide();}
-                 //nicedit compatibility end
-
                  $$('.print_fields').invoke('remove');*/
+
+                //nicedit compatibility start: also show hidden richtextEditor divs and hide richtextEditor textareas start
+                for(var i=0; i<hidden_nicedits_arr.length;i++){hidden_nicedits_arr[i].show();}
+                for(var i=0; i<nicedit_textarea_to_hide.length;i++){nicedit_textarea_to_hide[i].hide();}
+                //nicedit compatibility end
+
                 $(print_button.parentNode).show();
             });
 
@@ -7824,8 +8469,7 @@ var JotForm = {
             item.validateNumberInputs = function () {
                 var item = this,
                     id = item.id.replace(/input_(\d+)_\d+/, "$1"),
-                    numeric = /^(-?\d+[\.]?)+$/,
-                    numericDotStart = /^([\.]\d+)+$/;  //accept numbers starting with dot
+                    numeric = /^-?(\d+[\.]?)+$|([\.]\d+)+$/;
 
                 //correct any errors first that is attach in the item obj
                 item.errored = false;
@@ -7833,7 +8477,7 @@ var JotForm = {
                 //check if hidden, if so return its valid
                 if (!JotForm.isVisible(item)) return JotForm.corrected(item);
 
-                if (item.value && !numeric.test(item.value) && !numericDotStart.test(item.value) && item.hinted !== true) {
+                if (item.value !== '' && !numeric.test(item.value) && item.hinted !== true) {
                     return JotForm.errored(item, JotForm.texts.numeric);
                 }
 
@@ -7953,19 +8597,21 @@ var JotForm = {
                 }
             }
 
+            var form = JotForm.getForm(section)
+
             section.select('.form-pagebreak-next').invoke('observe', 'click', function () { // When next button is clicked
 
-                if (JotForm.saving) {
+                if (JotForm.saving || JotForm.loadingPendingSubmission) {
                     return;
                 }
-                if (JotForm.validateAll(JotForm.getForm(section), section) || getQuerystring('qp') !== "") {
+                if (JotForm.validateAll(form, section) || getQuerystring('qp') !== "") {
 
-                    if (window.parent && window.parent != window) {
-                        window.parent.postMessage('scrollIntoView', '*');
+                    if (!$this.noJump && window.parent && window.parent != window) {
+                        window.parent.postMessage('scrollIntoView::'+form.id, '*');
                     }
 
                     if(!JotForm.nextPage) {
-                        var sections = $$('.page-section');
+                        var sections = $$('.form-all > .page-section');
                         for(var i=sections.indexOf(section); i<sections.length; i++) {
                             if(JotForm.hidePages[parseInt(i, 10)+2] === true) {
                                 continue;
@@ -8033,16 +8679,16 @@ var JotForm = {
 
             section.select('.form-pagebreak-back').invoke('observe', 'click', function () { // When back button is clicked
 
-                if (window.parent && window.parent != window) {
-                    window.parent.postMessage('scrollIntoView', '*');
+                if (!$this.noJump && window.parent && window.parent != window) {
+                    window.parent.postMessage('scrollIntoView::'+form.id, '*');
                 }
 
-                if (JotForm.saving) {
+                if (JotForm.saving || JotForm.loadingPendingSubmission) {
                     return;
                 }
                 section.hide();
 
-                var sections = $$('.page-section');
+                var sections = $$('.form-all > .page-section');
                 var prevPage = JotForm.backStack.pop();
                 while(JotForm.backStack.length > 0) {
                     var pageNumber = sections.indexOf(prevPage) + 1;
@@ -8723,7 +9369,29 @@ var JotForm = {
     },
 
     hideButtonMessage: function () {
-        $$('.form-button-error').invoke('remove');
+      if (window.FORM_MODE == 'cardform') {
+        $$('.form-submit-button').each(function (button) {
+          var buttonParentNode = button.parentNode.parentNode;
+
+          var errorBox = buttonParentNode.select('.form-button-error')[0];
+          if (errorBox && buttonParentNode.hasClassName('jfCard')) {
+            var buttonParentNodeRect = buttonParentNode.getBoundingClientRect();
+            var errorBoxRect = errorBox.getBoundingClientRect();
+            
+            var qContainer = buttonParentNode.select('.jfCard-question')[0];
+            if (qContainer) {
+              var qContainerRect = qContainer.getBoundingClientRect(qContainer);
+          
+              buttonParentNode.style.maxHeight = buttonParentNodeRect.height + errorBoxRect.height;
+              qContainer.style.maxHeight = qContainerRect.height + errorBoxRect.height;
+
+              buttonParentNode.parentNode.style.paddingBottom = 'unset';
+            }
+          }
+        });
+      }
+
+      $$('.form-button-error').invoke('remove');
     },
 
     showButtonMessage: function () {
@@ -8732,7 +9400,30 @@ var JotForm = {
         $$('.form-submit-button').each(function (button) {
             var errorBox = new Element('div', {className: 'form-button-error'});
             errorBox.insert('<p>' + JotForm.texts.generalError + '</p>');
-            $(button.parentNode.parentNode).insert(errorBox);
+
+            var buttonParentNode = button.parentNode.parentNode;
+            $(buttonParentNode).insert(errorBox);
+
+            if (buttonParentNode.hasClassName('jfCard')) {
+              var buttonParentNodeRect = buttonParentNode.getBoundingClientRect();
+              
+              var progressWrapper = document.querySelector('#cardProgress');
+              var progressRect = progressWrapper.getBoundingClientRect();
+
+              var errorBoxRect = errorBox.getBoundingClientRect();
+
+              if (errorBoxRect.bottom > progressRect.top && getComputedStyle(progressWrapper).display !== 'none') {
+                var qContainer = buttonParentNode.select('.jfCard-question')[0];
+                if (qContainer) {
+                  var qContainerRect = qContainer.getBoundingClientRect(qContainer);
+        
+                  buttonParentNode.style.maxHeight = buttonParentNodeRect.height - errorBoxRect.height;
+                  qContainer.style.maxHeight = qContainerRect.height - errorBoxRect.height;
+  
+                  buttonParentNode.parentNode.style.paddingBottom = errorBoxRect.height;
+                }
+              }
+            }
         });
     },
 
@@ -8746,6 +9437,26 @@ var JotForm = {
                     }
                 });
             });
+        }
+    },
+
+    disableSubmitForCard: function (action, isConditionMatch) {
+        if (window.FORM_MODE !== 'cardform' || !window.CardForm || !window.CardForm.cards) return;
+        JotForm.disableSubmitButton = isConditionMatch;
+        JotForm.disableSubmitButtonMessage = (action && action.disableSubmitErrorMessage) ? action.disableSubmitErrorMessage : 'You are not eligible to submit this form.';
+        if (!isConditionMatch) {
+            JotForm.toggleDisableSubmitMessage();
+        }
+    },
+
+    toggleDisableSubmitMessage: function () {
+        var submitButtonCardIndex = window.CardForm.getLastVisibleIndex();
+        if (submitButtonCardIndex && document.getElementsByClassName('jfCard-disableSubmitError')) {
+            var disableSubmitErrorMessageElement = document.getElementsByClassName('jfCard-disableSubmitError')[submitButtonCardIndex];
+            if(!disableSubmitErrorMessageElement) return;
+
+            disableSubmitErrorMessageElement.innerHTML = '<p>' + JotForm.disableSubmitButtonMessage + '</p>';
+            disableSubmitErrorMessageElement.style.display = JotForm.disableSubmitButton ? 'block' : 'none';
         }
     },
 
@@ -8788,6 +9499,13 @@ var JotForm = {
                         }
                     }
 
+                    if (JotForm.disableSubmitButton) {
+                        JotForm.toggleDisableSubmitMessage();
+                        JotForm.enableButtons();
+                        e.stop();
+                        return;
+                    }
+
                     if (!JotForm.validateAll(form)) {
                         JotForm.enableButtons();
                         JotForm.showButtonMessage();
@@ -8814,10 +9532,13 @@ var JotForm = {
                                         if (JotForm.isCollapsed(firstError)) {
                                             JotForm.getCollapseBar(firstError).run('click');
                                         }
-                                        firstError.up('.form-line').scrollIntoView();
-                                        var firstInput = firstError.up('.form-line').down('input,select,textarea');
-                                        if (firstInput) {
-                                           firstInput.focus();    
+
+                                        if (!JotForm.noJump) {
+                                            firstError.up('.form-line').scrollIntoView();
+                                            var firstInput = firstError.up('.form-line').down('input,select,textarea');
+                                            if (firstInput) {
+                                               firstInput.focus();    
+                                            }
                                         }
                                     }
                                 }, 100);
@@ -8899,14 +9620,6 @@ var JotForm = {
                         });
                     }
 
-                    if(JotForm.isEncrypted) {
-                        JotForm.encryptAll(e, function(submitForm){
-                            if (submitForm) {
-                                form.submit();
-                            }
-                        });
-                    }
-
                     if (JotForm.autoFillDeployed && !JotForm.payment) {
                         if (typeof window.localStorage !== 'undefined') {
                             var formID = $$('form').first().readAttribute('id') + $$('form').first().readAttribute('name');
@@ -8926,6 +9639,13 @@ var JotForm = {
                     el.enable();
                 });
                 $$('.form-checkbox, .form-radio').each(function (el) {
+                    // prevent required products from being unrequired after a validation failure
+                    if (el.up('.form-product-item') && el.disabled && el.checked) {
+                        el.observe('click', function(e) {
+                            e.preventDefault();
+                            setTimeout(JotForm.countTotal, 20);
+                        });
+                    }
                     el.enable();
                 });
                 $$('.conditionallyDisabled').each(function (el) {
@@ -8960,6 +9680,36 @@ var JotForm = {
                         }, 1000);
                     });
                     return;
+                }
+
+                if (window.FORM_MODE == 'cardform' && Array.prototype.forEach && CardForm && CardForm.cards) { // ie8 & isCardform Checks
+                    if (window.toMarkdown) {
+                        Array.prototype.forEach.call(CardForm.cards, function (card, index) {
+                            if (card.markdownEditor && card.markdownEditor.setMarkdownFromHtml) {
+                                // if the textarea has Markdown editor,
+                                card.markdownEditor.setMarkdownFromHtml();
+                            }
+                        });
+                    }
+                }
+
+                if(JotForm.isEncrypted) {
+                    var redirectConditions = {};
+                    $A(JotForm.conditions).each(function (condition) {
+                        if(!condition.disabled && condition.type === 'url') {
+                            redirectConditions[condition.id] = JotForm.checkCondition(condition);
+                        }
+                    });
+                    //create hidden input type then pass datga as json
+                    JotForm.encryptAll(e, function(submitForm){
+                        if (submitForm) {
+                            // Check if there are conditions for redirection 
+                            if(Object.keys(redirectConditions).length > 0) {
+                                form.insert(new Element('input', {type: 'hidden', name: 'redirectConditions'}).putValue(JSON.stringify(redirectConditions)));
+                            }
+                            form.submit();
+                        }
+                    });
                 }
             });
 
@@ -9114,23 +9864,22 @@ var JotForm = {
         }
         return date;
     },
-
+    /*
+     * Get validation names from input className 
+     */
+    getInputValidations: function(input) {
+        if (input) {
+            return input.className.replace(/.*validate\[(.*)\].*/, '$1').split(/\s*,\s*/);
+        }
+        return [];
+    },
     /*
      * set validation function on field
      */
     setFieldValidation: function (input) {
         var $this = this;
-        var reg = {
-            email: /^\S[a-z0-9\/.!#$%&'*+\/=?\^_`{|}~\-]*(?:\.[a-z0-9!#$%&'*+\/=?\^_`{|}~\-]+)*@(?:[a-z0-9](?:[a-z0-9\-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9\-]*[a-z0-9])$/i,
-            alphanumeric: /^[\u00C0-\u1FFF\u2C00-\uD7FFa-zA-Z0-9\s]+$/,
-            numeric: /^(-?\d+[\.]?)+$/,
-            numericDotStart: /^([\.]\d+)+$/,  //accept numbers starting with dot
-            currency: /^-?[\$\£\€]?\d*,?\d*,?\d*(\.\d\d)?¥?$/,
-            alphabetic: /^[\u00C0-\u1FFF\u2C00-\uD7FFa-zA-Z\s]+$/,
-            cyrillic: /^[абвгдеёжзийклмнопрстуфхцчшщьыъэюяАБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЬЫЪЭЮЯ\s]*$/,
-            url: /(http|ftp|https){0,1}:{0,1}[\w\-_]+(\.[\w\-_]+)+([\w\-\.,@?^=%&amp;:/~\+#]*[\w\-\@?^=%&amp;/~\+#])?/
-        };
-        var validations = input.className.replace(/.*validate\[(.*)\].*/, '$1').split(/\s*,\s*/);
+        var reg = JotForm.validationRegexes;
+        var validations = JotForm.getInputValidations(input);
 
         input.validateInput = function (deep, dontShowMessage) { // dontShowMessage param will be passed and handled by cardForm
             if (document.get.ignoreValidation && document.get.ignoreValidation === "true") {
@@ -9149,6 +9898,7 @@ var JotForm = {
 
             if (!$(input.parentNode).hasClassName('form-matrix-values')
                 && !input.hasClassName('form-subproduct-option')
+                && !input.hasClassName('time-dropdown')
                 && !(input.id.match(/_quantity_/) || input.id.match(/_custom_/))) // do not clean product options (bugfix#461798)
             {
                 JotForm.corrected(input); // First clean the element
@@ -9161,7 +9911,10 @@ var JotForm = {
                     input.hintClear();
                 }, 150);
             } // Clear hint value if exists
-
+            // This means we are overriding this function.
+            if (typeof input.overridenValidateInput === 'function') {
+                return input.overridenValidateInput(input, deep, dontShowMessage);
+            }
             //change where it deploys
             //to first check the data  of this inputs before going to the next with a validate[*] class
             if (input.readAttribute('data-type') === 'input-spinner' && input.value) {
@@ -9178,6 +9931,15 @@ var JotForm = {
                 return input.validateMinimum();
             }
 
+            // Handles markdown editor validation
+            if (input.limitValidation && input.classList.contains('mdInput')) {
+                var errorText = input.limitValidation();
+
+                if(errorText !== false) {
+                    return JotForm.errored(input, errorText);
+                }
+            }
+
             if (input.up('.form-line').down('.form-textarea-limit-indicator-error')) {
                 // JotForm.handleTextareaLimits handles this better
                 input.triggerEvent('change');
@@ -9185,9 +9947,8 @@ var JotForm = {
             }
 
             if (vals.include('disallowFree')) {
-                var freeEmails = ['gmail', 'aim', 'outlook', 'hotmail', 'yahoo', 'mail', 'inbox'];
-                for (var i = 0; i < freeEmails.length; i++) {
-                    if (input.value.toLowerCase().indexOf("@" + freeEmails[i] + ".") > -1) {
+                for (var i = 0; i < JotForm.freeEmailAddresses.length; i++) {
+                    if (input.value.toLowerCase().indexOf("@" + JotForm.freeEmailAddresses[i] + ".") > -1) {
                         return JotForm.errored(input, JotForm.texts.freeEmailError, dontShowMessage);
                     }
                 }
@@ -9226,6 +9987,24 @@ var JotForm = {
                 if (JotForm.checkValueByOperator('before', JotForm.strToDate(currentDate), JotForm.strToDate(inputtedDate))) {
                     return JotForm.errored(input, JotForm.texts.pastDatesDisallowed, dontShowMessage);
                 }
+            }
+
+            if (JotForm.getContainer(input).getAttribute('data-type') === "control_datetime"
+              && input.readAttribute('data-age') && input.value) {
+      
+              var minAge = input.readAttribute('data-age');
+              var today = new Date();
+              var birthDate = new Date(input.value);
+              var age = today.getFullYear() - birthDate.getFullYear();
+              var m = today.getMonth() - birthDate.getMonth();
+              if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+                  age--;
+              }
+              if (age < minAge) {
+                var errorTxt = JotForm.texts.ageVerificationError.replace('{minAge}', minAge)
+                JotForm.errored(input, errorTxt);
+                return false; // date is not valid
+              }
             }
 
             if (vals.include('limitDate')) {
@@ -9373,10 +10152,15 @@ var JotForm = {
             if (vals.include("required")) {
                 if (input.tagName == 'INPUT' && input.readAttribute('type') == "file") { // Upload
                     var formInput = input.up('.form-input') || input.up('.form-input-wide');
-                    if (input.value.empty() && !(input.uploadMarked || formInput.uploadMarked)) {
-                        return JotForm.errored(input, JotForm.texts.required, dontShowMessage);
-                    } else {
-                        return JotForm.corrected(input);
+                    var isMultiple = input.readAttribute('multiple') === 'multiple';
+                    if (!isMultiple) {
+                        if (input.value.empty() && !(input.uploadMarked || (formInput && formInput.uploadMarked))) {
+                            return JotForm.errored(input, JotForm.texts.required, dontShowMessage);
+                        } else {
+                            return JotForm.corrected(input);
+                        }
+                    } else{
+                        return input.up('div[class*=validate[multipleUpload]]').validateInput();
                     }
                 } else if (input.tagName == "INPUT" && (input.readAttribute('type') == "radio" || input.readAttribute('type') == "checkbox")) {
 
@@ -9414,7 +10198,7 @@ var JotForm = {
                         }
 
                     } else {
-                        
+
                         var otherInput = input.up(".form-" + input.type + "-item") ? input.up(".form-" + input.type + "-item").down(".form-" + input.type + "-other-input") : null;
                         if (otherInput) { //b#641595 if other is checked box should be filled
                             if (input.checked && otherInput.value == "") {
@@ -9471,6 +10255,10 @@ var JotForm = {
                                     }
 
                                     return JotForm.errored(input, JotForm.texts.required, dontShowMessage);
+                                } else {
+                                  $A(cont.querySelectorAll('select[id*="quantity"], input[id*="quantity"]')).forEach(function(q) {
+                                    if (q.getValue() > 0) JotForm.corrected(q);
+                                  })
                                 }
                             } else {
                                 if(cont.select("input:checked").length === 0) {
@@ -9528,9 +10316,22 @@ var JotForm = {
                     }
                 } else if (input.name && input.name.include("[")) {
                     try {
+                        // Disabled matrix check fixes #1311177,
+                        var isDisabledMatrix = $(input).getAttribute('data-component') === 'matrix' && ($(input).up().hasClassName('form-matrix-values-disabled') || $(input).up(1).hasClassName('form-matrix-values-disabled'))
+                        if (isDisabledMatrix) {
+                            return true;
+                        }
+
                         var cont = $this.getContainer(input);
+                        // Preventing address component error checks before revealing them
+                        if(input.hasClassName('form-address-search') && cont.select('.jfQuestion-clean').length > 0) {
+                            inputs = [input];
+                        } else {
+                            inputs = cont.select('input,select[name*=' + input.name.replace(/\[.*$/, '') + ']');
+                        }
+
                         // Ozan, bugfix: 133419, both input and select fields should be selected
-                        var checkValues = cont.select('input,select[name*=' + input.name.replace(/\[.*$/, '') + ']').map(function (e) {
+                        var checkValues = inputs.map(function (e) {
                             // If this is an address field and country is not United States or Canada
                             // then don't require state name
                             if (e.hasClassName('form-address-state')) {
@@ -9592,13 +10393,14 @@ var JotForm = {
                                     }
                                 }
                             }
-                            e.removeClassName('form-validation-error');
+
+                            if (!e.hasClassName('js-forMixed')) {
+                                e.removeClassName('form-validation-error');
+                            }
                             return false;
                         });
                         // skip payment field validation on edit mode (b#446215)
-                        if (JotForm.payment && cont.getAttribute('data-type').match(JotForm.payment)
-                            && ["edit", "inlineEdit", "submissionToPDF"].indexOf(document.get.mode) > -1
-                            && document.get.sid) {
+                        if (JotForm.payment && cont.getAttribute('data-type').match(JotForm.payment) && JotForm.isEditMode()) {
                             return JotForm.corrected(input);
                         }
 
@@ -9609,7 +10411,31 @@ var JotForm = {
                                     return JotForm.corrected(input);
                                 }
                             }
-                            return JotForm.errored(input, JotForm.texts.required, dontShowMessage);
+                            if(input.hasClassName('form-address-search') && cont.select('.jfQuestion-clean').length < 1) {
+                              return JotForm.corrected(input);
+                            }
+
+                            var isErrorExists = false;
+                            var errorMessage = JotForm.texts.required;
+
+                            checkValues.map(function(isErrored, index) {
+                                if(isErrored) {
+                                    var input = inputs[index];
+                                    if (input.hasClassName('js-forMixed')){
+                                      errorMessage = JotForm.texts.incompleteFields;
+                                      if (input.hasClassName('forEmail') && typeof input.validateEmailField === 'function') {
+                                        errorMessage = JotForm.texts.email;
+                                        input.validateEmailField();
+                                      }
+                                    }
+                                    isErrorExists = true;
+                                    return JotForm.errored(inputs[index], errorMessage, dontShowMessage);
+                                }
+                            });
+
+                            return !isErrorExists;
+                        } else {
+                            JotForm.corrected(input);
                         }
                     } catch (e) {
                         // This can throw errors on internet explorer
@@ -9642,7 +10468,15 @@ var JotForm = {
                     if(JotForm.getContainer(input).hasClassName("form-datetime-validation-error")) {
                         return JotForm.errored(input, 'Enter a valid date', dontShowMessage);
                     }
-                } else if ((!input.value || input.value.strip(" ").empty() || input.value.replace('<br>', '').empty() || input.value == 'Please Select') && !(input.readAttribute('type') == "radio" || input.readAttribute('type') == "checkbox") && !$(input.parentNode).hasClassName('form-matrix-values')) {
+                } else if ((!input.value || input.value.strip(" ").empty() || input.value.replace('<br>', '').empty() || input.value == 'Please Select')
+                            && !(input.readAttribute('type') == "radio" || input.readAttribute('type') == "checkbox")
+                            && !$(input.parentNode).hasClassName('form-matrix-values')
+                            && JotForm.getContainer(input).getAttribute('data-type') !== "control_address") {
+
+                    if (input.hasClassName('form-dropdown') && $$('.jfDropdown-search:focus').length > 0) {
+                        return JotForm.corrected(input);
+                    }
+
                     return JotForm.errored(input, JotForm.texts.required, dontShowMessage);
                 }
 
@@ -9714,11 +10548,25 @@ var JotForm = {
             return JotForm.corrected(input);
         };
         var validatorEvent = function (e) {
-            setTimeout(function () { // to let focus event to work
-                if ($this.lastFocus && ($this.lastFocus == input || $this.getContainer($this.lastFocus) != $this.getContainer(input))) {
+            setTimeout(function() { // to let focus event to work
+                var inputContainer = $this.getContainer(input);
+                var requiredFields = inputContainer.select('[class*=validate]');
+                var lastRequiredField = requiredFields[requiredFields.length - 1];
+                
+                var isLastRequiredField = ($this.getContainer($this.lastFocus) == $this.getContainer(input) && lastRequiredField == input);
+
+                var isPrefix = input && input.getAttribute('data-component') === 'prefix';
+
+                if ($this.lastFocus
+                    && (($this.lastFocus == input || $this.getContainer($this.lastFocus) != $this.getContainer(input)) || isLastRequiredField)
+                    && (!isPrefix)
+                    && (!(window.FORM_MODE === 'cardform' && inputContainer.dataset.type === 'control_fullname'))
+                ){
                     input.validateInput();
                 } else if (input.type == "hidden" || input.type == 'file') {
                     input.validateInput(); // always run on hidden/upload elements
+                } else if (inputContainer.dataset.type === 'control_address') {
+                    input.validateInput();  // always validate address fields on blur
                 }
             }, 10);
         };
@@ -10021,7 +10869,18 @@ var JotForm = {
                 return $('input_' + id).value > 0;
             case "file":
                 if ($$('#id_' + id + ' input')[0].readAttribute('multiple') === 'multiple' || $$('#id_' + id + ' input')[0].readAttribute('multiple') === '') {
-                    return $('id_' + id).select('.qq-upload-list li').length > 0;
+                    var fileList = $('id_' + id).select('.qq-upload-list li');
+                    
+                    if (fileList.length > 0) {
+                        var status = true;
+                        fileList.each(function(elem) {
+                            if (elem.getAttribute('class').indexOf('fail') > 0) {
+                                status = false;
+                            }
+                        });
+                        return status;
+                    }
+                    return true;
                 } else {
                     return $('input_' + id).value;
                 }
@@ -10254,7 +11113,7 @@ var JotForm = {
             },
             _handleStarRating: function (data) {
                 $$(".form-star-rating").each(function (rating) {
-                    rating.setRating(rating.down("input").value);
+                  if(rating.setRating === 'function') rating.setRating(rating.down("input").value);
                 });
             },
             _handlePaymentTotal: function() {
@@ -10276,6 +11135,7 @@ var JotForm = {
         //initiate jquery autoFill
         jQuery(_form).autoFill({
             timeout: ( Number(params.timeout) > 0 ) ? params.timeout : 4,
+            sessionID: JotForm.sessionID,
             excludeFields: excludeFields,
             ttl: params.ttl,
             allowBindOnChange: (params.bindChange && params.bindChange == 'on') ? true : false,
@@ -10367,7 +11227,7 @@ var JotForm = {
 		}
 
 		if (questions.length > 0) {
-			questions.forEach(function(question) {
+			questions.each(function(question) {
 				if (question) {
 					switch (question.type) {
 						case 'control_chargify':
@@ -10430,32 +11290,40 @@ var JotForm = {
         if(!maskValue) return;
 
         maskValue = maskValue.replace(/&#39;/g, "'");
-        var unmask = ( unmask ) ? unmask : false
-            , extendedMask = {};
+        var unmask = ( unmask ) ? unmask : false;
+
+        var placeholder = maskValue.replace(/#/g, '_');
 
         //extend the definitions to accept other characters
-        extendedMask['#'] = {
-            validator: "[0-9]",
-            cardinality: 1
-        };
+        jQuery.mask.definitions = {
+            "#": "[0-9]"
+        }
 
         //include more mask options for specific questions
         if (type === "textMasking") {
-            extendedMask['@'] = {
-                validator: "[A-Za-z\u0410-\u044F\u0401\u0451\u4E00-\u9FFF]",
-                cardinality: 1
-            };
+            jQuery.mask.definitions["@"]= "[A-Za-z\u0410-\u044F\u0401\u0451\u4E00-\u9FFF]";
+            jQuery.mask.definitions["*"]= "[0-9A-Za-z\u0410-\u044F\u0401\u0451\u4E00-\u9FFF]";
+            placeholder = placeholder.replace(/\*|@/g, '_');
         }
 
-        jQuery.extend(jQuery.inputmask.defaults.definitions, extendedMask);
+        var jqObject = jQuery(toSelector);
 
         //initiate masking for phones.
         if (unmask) {
-            jQuery(toSelector).inputmask('remove');
+            jqObject.mask( "unmask" ).off('blur');
         }
         else {
-            jQuery(toSelector).inputmask(maskValue, {"placeholder": "_"});
-            jQuery(toSelector).attr('maskValue', maskValue);
+            jqObject.mask(maskValue, {placeholder: "_", autoclear: false})
+                // trigger change event on blur
+                .on('blur', function(e) {
+                    e.target.dispatchEvent(new Event('change'));
+                })
+                .attr('maskValue', maskValue)
+                .attr('placeholder', placeholder);
+
+            // move the caret to first placeholder char
+            var caretPos = jqObject.val().indexOf('_');
+            jqObject.caret(caretPos);
         }
     },
 
@@ -10532,6 +11400,7 @@ var JotForm = {
      */
     loadStyleSheet: function (url, onLoad) {
         var link = document.createElement('link');
+        link.setAttribute('id', 'form-css');
         link.setAttribute('type', 'text/css');
         link.setAttribute('rel', 'stylesheet');
         link.setAttribute('href', url);
@@ -10605,9 +11474,11 @@ var JotForm = {
             return false;
         }
         if (_form) {
-            var uuid = generateUUID();
-            insertAfter(createImageEl(uuid), _form);
-            createEventID(uuid);
+            if (location && location.href && location.href.indexOf('&nofs') == -1 && location.href.indexOf('&sid') == -1) {
+                var uuid = generateUUID();
+                insertAfter(createImageEl(uuid), _form);
+                createEventID(uuid);
+            }
         }
         function insertAfter(newNode, referenceNode) {
             referenceNode.parentNode.insertBefore(newNode, referenceNode.nextSibling);
@@ -10673,7 +11544,8 @@ var JotForm = {
         var self = this;
         var integration = getQuerystring('embeddedvia');
         if (integration) {
-            if (integration === 'weebly') {
+            // Disable weebly fix on cardforms
+            if (integration === 'weebly' && !(window.FORM_MODE && window.FORM_MODE == 'cardform')) {
                 // make all forms responsive for weebly integration
                 if (!self.isStyleSheetLoaded('mobile.responsive.min.css')) {
                     var styleSheetUrl = 'https://widgets.jotform.io/mobileResponsive/mobile.responsive.min.css';
@@ -10730,135 +11602,301 @@ var JotForm = {
       });
     },
 
-    setMatrixLayout: function(id, passive) {
+    updateMatrixInputs: function(id, target) {
         var matrix = document.getElementById("matrix_" + id);
+        var dataType = matrix.getAttribute('data-type');
+        var desktopWrapper = $(matrix).select('.forDesktop')[0];
+        var mobileWrapper = $(matrix).select('.forMobile')[0];
+
+        if (target === 'mobile') {
+            var hiddenMatrix = mobileWrapper;
+            var visibleMatrix = desktopWrapper;
+        } else  {
+            var hiddenMatrix = desktopWrapper;
+            var visibleMatrix = mobileWrapper
+        }
+
+        var hiddenWrappers = $(hiddenMatrix).select('.form-matrix-values');
+        hiddenWrappers.each(function(i) {
+            $(i).removeClassName('form-matrix-values');
+            $(i).addClassName('form-matrix-values-disabled');
+        });
+
+        var hiddenInputs = $(hiddenMatrix).select('input, select');
+        hiddenInputs.each(function(i) {
+          if (i.id.indexOf('disabled') < 0) {
+            i.id += '_disabled';
+            i.setAttribute('data-name', i.getAttribute('name'));
+            i.removeAttribute('name');
+          }
+        });
+
+
+        var visibleWrapper = $(visibleMatrix).select('.form-matrix-values');
+        visibleWrapper.each(function(i) {
+            $(i).removeClassName('form-matrix-values-disabled');
+            $(i).addClassName('form-matrix-values');
+        });
+
+        var visibleInputs = $(visibleMatrix).select('input');
+        visibleInputs.each(function(i) {
+            i.id = i.id.replace('_disabled', '');
+            if (i.getAttribute('data-name')) {
+                i.setAttribute('name', i.getAttribute('data-name'));
+                i.removeAttribute('data-name');
+            }
+        });
+
+
+        $(hiddenMatrix).addClassName('hidden-matrix');
+        $(visibleMatrix).removeClassName('hidden-matrix');
+    },
+
+    setMatrixLayout: function(id, passive, mobileActiveQuestionOrder) {
+        var matrix = document.getElementById("matrix_" + id);
+        var desktopVersion = $(matrix).select('.forDesktop')[0];
+        var mobileVersion = $(matrix).select('.forMobile')[0];
+        var dataType = matrix.getAttribute('data-type');
 
         if (!passive) {
-            var desktopVersion = $(matrix).select('.forDesktop')[0];
-            var mobileVersion = $(matrix).select('.forMobile')[0];
             if ((desktopVersion && desktopVersion.getStyle('display') !== 'none') && mobileVersion) {
-                mobileVersion.remove();
+                this.updateMatrixInputs(id, 'mobile');
+                // mobileVersion.remove();
             } else if((mobileVersion && mobileVersion.getStyle('display') !== 'none') && desktopVersion) {
-                desktopVersion.remove();
+                this.updateMatrixInputs(id, 'desktop');
+                // desktopVersion.remove();
+            }
+        }
+        // Calculates new input types height
+        if(['Slider', 'Emoji Slider', 'Yes No'].indexOf(dataType) > -1) {
+            if (desktopVersion) {
+                var matrixLabelListItems = desktopVersion.getElementsByClassName('jfMatrixLabelList-item');
+                var matrixInputListItems = desktopVersion.getElementsByClassName('jfMatrixInputList-item');
+                if (Array.prototype.forEach) { // i.e 8 users :(
+                    Array.prototype.forEach.call(matrixLabelListItems, function (matrixLabel, index) {
+                        // lets give the height of label to input  line
+                        var matrixInput = matrixInputListItems[index];
+                        if (matrixInput && matrixLabel) {
+                            matrixInput.style.height = matrixLabel.offsetHeight + 'px';
+                        }
+                    });
+                }
             }
         }
 
-        if ($(matrix).select('.forDesktop').length > 0) {
-            var headerItems = matrix.getElementsByClassName('jfMatrixHeader-item');
-            var tableCells = matrix.getElementsByClassName('jfMatrixTable-cell');
+        var hasMobile = $(matrix).select('.forMobile').length > 0;
+        var isSlider = ['Slider', 'Emoji Slider'].indexOf(dataType) > -1;
+        if (isSlider && hasMobile) {
+            var mobileSlider = $(matrix).select('.slider')[0];
+            var mobileNext = $(matrix).select('.jfMobileMatrix-nextRow')[0];
+            var mobilePrev = $(matrix).select('.jfMobileMatrix-prevRow')[0];
+            var rowList = $(matrix).select('.jfMobileMatrix-row');
+            var bulletList = $(matrix).select('.jfMobileMatrix-columnDot');
+            var rowLength = rowList.length;
+            var currentRow = $(matrix).select('.jfMobileMatrix-row.isSelected')[0];
+            var currIndex = parseInt(currentRow.readAttribute('data-order'), 10);
+            var newIndex = false;
+            var newEl = false;
 
-            for (var i = 1; i < headerItems.length; i++) {
-                var cell = tableCells[i].down();
-                if(headerItems[i].getElementsByTagName('div')[0].getLayout().get('width') < 5) {
-                  var cellWidth = 80;
-                } else {
-                  var cellWidth = headerItems[i].getElementsByTagName('div')[0].getLayout().get('padding-box-width');  
-                }
-                cell.style.width = cellWidth + 'px';
+            if (bulletList[currIndex]) {
+              bulletList[currIndex].addClassName('isActive');
             }
 
-            headerItems[0].getElementsByTagName('div')[0].style.width = tableCells[0].getElementsByTagName('div')[0].getLayout().get('padding-box-width') + 'px';
+            var mobileItems = mobileSlider.querySelectorAll('.jfMatrixInputList-item');
 
-            var matrixTable = matrix.getElementsByClassName('jfMatrixTable')[0];
-            var matrixHeader = matrix.getElementsByClassName('jfMatrixHeader')[0];
-
-            matrixTable.addEventListener('scroll', function () {
-              matrixHeader.scrollLeft = matrixTable.scrollLeft;
+            $(matrix).select('.jfMobileMatrix-prevRow')[0].observe('click', function() {
+                handleMobilePrevClick();
+            });
+            $(matrix).select('.jfMobileMatrix-nextRow')[0].observe('click', function() {
+                handleMobileNextClick();
             });
 
-            // if (matrix.querySelector('.jfMatrixTable-row').getLayout().get('padding-box-width') > matrixTable.getLayout().get('padding-box-width')) {
-            //   matrixHeader.style('margin-right', this.getScrollbarWidth());
-            // }
+            var setActiveSlider = function() {
+                mobileItems[newIndex].removeClassName('isHidden');
+                mobileItems[currIndex].addClassName('isHidden');
+
+                bulletList[currIndex].removeClassName('isActive');
+                bulletList[newIndex].addClassName('isActive');
+
+                currentRow = newEl;
+                currIndex = newIndex;
+            };
+
+            var handleMobileNextClick = function () {
+                newIndex = currIndex + 1;
+                if (newIndex !== rowLength) {
+                    newEl = rowList[newIndex];
+                    newEl.addClassName('isSelected');
+                    currentRow.removeClassName('isSelected');
+                    if (newIndex > 0) {
+                      mobilePrev.disabled = false;
+                    }
+                    if (newIndex + 1 === rowLength) { mobileNext.disabled = true; }
+
+                    setActiveSlider();
+                }
+            };
+
+            var handleMobilePrevClick = function () {
+              if (currIndex !== 0) {
+                newIndex = currIndex - 1;
+                newEl = rowList[newIndex];
+                newEl.addClassName('isSelected');
+                currentRow.removeClassName('isSelected');
+                if (newIndex === 0) { mobilePrev.disabled = true; }
+                if (newIndex >= rowLength) { mobileNext.disabled = true; }
+                if (newIndex < rowLength - 1) {
+                  mobileNext.disabled = false;
+                }
+
+                setActiveSlider();
+              }            
+            };
         }
 
-        if ($(matrix).select('.forMobile').length > 0) {
-            // next & prev buttons click handlers
-            var handleNextButtonClick = function() {
-                $(this).stopObserving('click');
+        if(!isSlider) {
+            if ($(matrix).select('.forDesktop').length > 0) {
+                var headerItems = matrix.getElementsByClassName('jfMatrixHeader-item');
+                var tableCells = matrix.getElementsByClassName('jfMatrixTable-cell');
 
-                var activeQuestionOrder = parseInt($(matrix).select('.jfMatrix-question.isActive')[0].readAttribute('data-order'));
-                var questions =  $(matrix).select('.jfMatrix-question');
-
-                questions.each(function(q) {
-                    q.removeClassName('isActive');
-                    if (q.readAttribute('data-order') == activeQuestionOrder + 1) {
-                        $(q).addClassName('isActive');
+                for (var i = 1; i < headerItems.length; i++) {
+                    var cell = tableCells[i].down();
+                    if(headerItems[i].getElementsByTagName('div')[0].getLayout().get('width') < 5) {
+                      var cellWidth = 80;
+                    } else {
+                      var cellWidth = headerItems[i].getElementsByTagName('div')[0].getLayout().get('padding-box-width');  
                     }
-                });
+                    cell.style.width = cellWidth + 'px';
+                }
+                if (headerItems && headerItems.length) {
+                    headerItems[0].getElementsByTagName('div')[0].style.width = tableCells[0].getElementsByTagName('div')[0].getLayout().get('padding-box-width') + 'px';
 
-                var choices = $(matrix).select('.jfMatrix-choiceWrapper');
-                choices.each(function(c) {
-                    c.removeClassName('isActive');
-                    if (c.readAttribute('data-order') == activeQuestionOrder + 1) {
-                        $(c).addClassName('isActive');
-                    }
-                });
+                    var matrixTable = matrix.getElementsByClassName('jfMatrixTable')[0];
+                    var matrixHeader = matrix.getElementsByClassName('jfMatrixHeader')[0];
 
-                activeQuestionOrder = activeQuestionOrder + 1;
-
-                if (activeQuestionOrder + 1 == questions.length) {
-                    $(this).disable();
+                    matrixTable.addEventListener('scroll', function () {
+                      matrixHeader.scrollLeft = matrixTable.scrollLeft;
+                    });
                 }
 
-                $(matrix).select('.jfMatrixProgress-text span')[0].innerHTML = activeQuestionOrder + 1;
-                $(matrix).select('.jfMatrix-progress .forMatrixPrev')[0].enable();
-
-                $(this).observe('click', handleNextButtonClick);
-            };
-
-            var handlePrevButtonClick = function() {
-                $(this).stopObserving('click');
-
-                var activeQuestionOrder = parseInt($(matrix).select('.jfMatrix-question.isActive')[0].readAttribute('data-order'));
-
-                var questions =  $(matrix).select('.jfMatrix-question');
-                questions.each(function(q) {
-                    q.removeClassName('isActive');
-                    if (q.readAttribute('data-order') == activeQuestionOrder - 1) {
-                        $(q).addClassName('isActive');
-                    }
-                });
-
-                var choices = $(matrix).select('.jfMatrix-choiceWrapper');
-                choices.each(function(c) {
-                    c.removeClassName('isActive');
-                    if (c.readAttribute('data-order') == activeQuestionOrder - 1 ) {
-                        $(c).addClassName('isActive');
-                    }
-                });
-
-                // activeQuestionOrder = activeQuestionOrder - 1;
-
-                if (activeQuestionOrder - 1 == 0) {
-                    $(this).disable();
-                }
-
-                $(matrix).select('.jfMatrixProgress-text span')[0].innerHTML = activeQuestionOrder;
-                $(matrix).select('.jfMatrix-progress .forMatrixNext')[0].enable();
-
-                $(this).observe('click', handlePrevButtonClick);
-            };
-
-            $(matrix).select('.jfMatrixProgress-button.forMatrixNext')[0].observe("click", handleNextButtonClick);
-            $(matrix).select('.jfMatrixProgress-button.forMatrixPrev')[0].observe("click", handlePrevButtonClick);
-
-            // show next question automatically
-            if (!passive) {
-                $(matrix).select('input').each(function(input) {
-                    if(input.type == 'radio') {
-                        input.observe('click', function() {
-                            setTimeout(function() {
-                                var nextButton = $(matrix).select('.jfMatrixProgress-button.forMatrixNext')[0];
-                                if ($(nextButton).readAttribute('disabled') == null) {
-                                    $(nextButton).triggerEvent('click');
-                                }
-                            }, 500);
+                // if (matrix.querySelector('.jfMatrixTable-row').getLayout().get('padding-box-width') > matrixTable.getLayout().get('padding-box-width')) {
+                //   matrixHeader.style('margin-right', this.getScrollbarWidth());
+                // }
+            }
+            if (hasMobile) {
+                // add necessary classes for active question
+                var setActiveQuestion = function (activeQuestionOrder) {
+                    var questions = $(matrix).select('.jfMatrix-question');
+                    var bullets = $(matrix).select('.jfMobileMatrix-columnDot');
+                    var isNextEnabled = isBackEnabled = true;
+                    questions.each(function(q) {
+                        q.removeClassName('isActive');
+                        if (q.readAttribute('data-order') == activeQuestionOrder) {
+                            $(q).addClassName('isActive');
+                        }
+                    });
+                    if (bullets) {
+                        bullets.each(function(q) {
+                            q.removeClassName('isActive');
+                            if (q.readAttribute('data-order') == activeQuestionOrder) {
+                                $(q).addClassName('isActive');
+                            }
                         });
                     }
-                });
+                    var choices = $(matrix).select('.jfMatrix-choiceWrapper');
+                    choices.each(function(c) {
+                        c.removeClassName('isActive');
+                        if (c.readAttribute('data-order') == activeQuestionOrder) {
+                            $(c).addClassName('isActive');
+                        }
+                    });
+                    // Set button's activity
+                    if (parseInt(activeQuestionOrder, 10) === questions.length - 1) {
+                        isNextEnabled = false;
+                    } else if (parseInt(activeQuestionOrder, 10) === 0) {
+                        isBackEnabled = false;
+                    }
+                    if ($(matrix).select('.forMatrixPrev').length > 0) {
+                        $(matrix).select('.forMatrixPrev')[0].disabled = !isBackEnabled;
+                    }
+                    if ($(matrix).select('.forMatrixNext').length > 0) {
+                        $(matrix).select('.forMatrixNext')[0].disabled = !isNextEnabled;
+                    }
+                    // set question number
+                    $(matrix).select('.jfMatrixProgress-text span')[0].innerHTML = activeQuestionOrder + 1;
+                }
+                if (mobileActiveQuestionOrder) {
+                    setActiveQuestion(mobileActiveQuestionOrder);
+                }
+                // next & prev buttons click handlers
+                var handleNextButtonClick = function() {
+                    $(this).stopObserving('click');
+                    var questions = $(matrix).select('.jfMatrix-question');
+                    var activeQuestionOrder = parseInt($(matrix).select('.jfMatrix-question.isActive')[0].readAttribute('data-order'));
+        
+                    activeQuestionOrder = parseInt(activeQuestionOrder, 10) + 1;
+                    setActiveQuestion(activeQuestionOrder);
+                    $(this).observe('click', handleNextButtonClick);
+                };
+
+                var handlePrevButtonClick = function() {
+                    $(this).stopObserving('click');
+                    var questions = $(matrix).select('.jfMatrix-question');
+
+                    var activeQuestionOrder = parseInt($(matrix).select('.jfMatrix-question.isActive')[0].readAttribute('data-order'));
+                    activeQuestionOrder = parseInt(activeQuestionOrder, 10) - 1;
+                    setActiveQuestion(activeQuestionOrder);
+                    $(this).observe('click', handlePrevButtonClick);
+                };
+
+                $(matrix).select('.forMatrixNext').length > 0 && $(matrix).select('.forMatrixNext')[0].observe("click", handleNextButtonClick);
+                $(matrix).select('.forMatrixPrev').length > 0 && $(matrix).select('.forMatrixPrev')[0].observe("click", handlePrevButtonClick);
+
+
+                var findAncestor = function(el, cls) {
+                  while ((el = el.parentElement) && !el.classList.contains(cls));
+                  return el;
+                }
+
+                // show next question automatically
+                if (!passive && !mobileVersion.hasClassName('hidden-matrix')) {
+                    $(matrix).select('input').each(function(input) {
+                        if(input.type == 'radio' && dataType !== 'Yes No') {
+                            var showNextQuestion = function() {
+                                $(this).stopObserving('click');
+
+                                if (mobileVersion.hasClassName('hidden-matrix')) {return;}
+
+                                var activeTable = findAncestor(this, 'jfMatrixChoice-table');
+                                if ($(activeTable).select('.jfMatrixChoice-row.isSelected').length > 0) {
+                                    var selectedRow = $(activeTable).select('.jfMatrixChoice-row.isSelected')[0];
+                                    selectedRow.removeClassName('isSelected');
+                                }
+                                
+                                var activeRow = findAncestor(this, 'jfMatrixChoice-row');
+                                activeRow.addClassName('isSelected');
+                                setTimeout(function() {
+                                    var nextButton = $(matrix).select('.jfMatrixProgress-button.forMatrixNext')[0];
+                                    if ($(nextButton) && $(nextButton).readAttribute('disabled') == null) {
+                                        $(nextButton).triggerEvent('click');
+                                    }
+                                }, 500);
+
+                                $(this).observe('click', showNextQuestion);
+
+                            };
+
+                            input.observe('click', showNextQuestion);
+                        }
+                    });
+                }
             }
         }
     },
+
+    // setMatrixMobileSlider: function(matrixContainer) {
+
+    // },
 
     setRatingLayout: function(id) {
         if(document.getElementById('stage')) { return null; }
@@ -10911,12 +11949,6 @@ var JotForm = {
         });
 
         ratingInputs.each(function(ratingInput) {
-            ratingInput.addEventListener('focus', function() {
-                if($(rating).select('.jfRating-input:checked').length) {
-                    ratingBefore = $(rating).select('.jfRating-input:checked')[0].value;
-                }
-            });
-
             ratingInput.addEventListener('mouseenter', function() {
                 $(this).up('.jfRating-item').addClassName('indicate');
 
@@ -10937,8 +11969,9 @@ var JotForm = {
             });
 
             ratingInput.addEventListener('change', function() {
-                JotForm.setRatingItemsChecked(id, this.value, ratingBefore);
+                JotForm.setRatingItemsChecked(id, this.value);
             });
+
         })
     },
 
@@ -10954,14 +11987,18 @@ var JotForm = {
         var rating = document.getElementById('rating_' + id);
         var ratingSelection = $(rating).select('.jfRating-selection');
         var selectedValue = !isNaN(value) && parseInt(value);
-        var ratingBefore = !isNaN(ratingBefore) && parseInt(ratingBefore) || -99999;
+        var ratingBefore = !isNaN(ratingBefore) && parseInt(ratingBefore) || null;
         var ratingInputs = $(rating).select('.jfRating-input');
-
 
         var stack = JotForm['ratingFnQueues']['fnQueue_' + id];
         var timer = null;
         var queueProcessInterval = 33;
-        
+
+        if(!ratingBefore && rating.dataset.oldValue) {
+            ratingBefore = rating.dataset.oldValue;
+        }
+        rating.dataset.oldValue = value;
+
         var queueProcessor = {
             enqueue: function(fnCall) {
                 stack.push(fnCall);
@@ -10983,7 +12020,7 @@ var JotForm = {
             ratingInput.up('.jfRating-item').removeClassName('indicate');
         });
 
-        if(ratingBefore < value) {
+        if(ratingBefore < selectedValue || ratingBefore === null) {
             ratingSelection.each(function(ratingItem, key) {
                 if(ratingItem.dataset) {
                     var itemValue = ratingItem.dataset.value;
@@ -11000,7 +12037,7 @@ var JotForm = {
             }, { value: value });
         }
 
-        if(ratingBefore > value) {
+        if(ratingBefore && ratingBefore > selectedValue) {
             ratingSelection.reverse();
             ratingSelection.each(function(ratingItem, key) {
                 if(ratingItem.dataset) {
@@ -11017,6 +12054,13 @@ var JotForm = {
                 }
             }, { value: value });
         }
+
+        $('input_' + id).value = value;
+
+        var hiddenInput = rating.select('.form-textbox')[0];
+        hiddenInput.value = parseInt(value, 10);
+
+        JotForm.runConditionForId(id.toString());
     },
 
     setRatingClickTransfer: function(id) {
@@ -11070,8 +12114,128 @@ var JotForm = {
                 firstNameInput.focus();
             }, 500);
         });
+    },
+
+    initShoppingBag: function() {
+        /*
+            - This function only works for cardForms.
+            - It is implemented on patch.js
+        */
+    },
+
+    initProductPages: function() {
+        /*
+            - This function only works for cardForms.
+            - It is implemented on patch.js
+        */
+    },
+
+    initDonation: function() {
+        /*
+            - This function only works for cardForms.
+            - It is implemented on patch.js
+        */
+    },
+
+    // toQueryParams with custom regex
+    customToQueryParams: function (text, separator) {
+        var match = text.strip().match(/[^#&?]*?=[^#&?]*/g);
+        if (!match || !match[1]) return { };
+    
+        return match[1].split(separator || '&').inject({ }, function(hash, pair) {
+          if ((pair = pair.split('='))[0]) {
+            var key = decodeURIComponent(pair.shift()),
+                value = pair.length > 1 ? pair.join('=') : pair[0];
+    
+            if (value != undefined) try { value = decodeURIComponent(value) } catch(e) { value = unescape(value) } // temporary fix (80746)
+            
+            if (key in hash) {
+              if (!Object.isArray(hash[key])) hash[key] = [hash[key]];
+              hash[key].push(value);
+            }
+            else hash[key] = value;
+          }
+          return hash;
+        });
+    },
+
+    // replaces already loaded form css, eg. /stylebuilder/{formID}.css, with embed css, eg. /stylebuilder/{formID}/{referrer}.css?
+    loadEmbedStyle: function(formID, styles) {
+        try {
+            styles = JSON.parse(styles);
+        } catch(e) {
+            styles = {};
+        }
+
+        var isEmbed = window.parent !== window;
+        if (!isEmbed) { return; }
+        if (window.location.href.indexOf('disableSmartEmbed') > -1) {
+            return;
+        }
+        var formCSS = document.getElementById('form-css');
+        if (!formCSS) { return; }
+        var parser = document.createElement('a');
+        parser.href = formCSS.href;
+        // var params = this.customToQueryParams(parser.search);
+        var params = parser.search.toQueryParams();
+        var embedUrl = params.embedUrl || document.URL;
+
+        // The reason I am generating md5 before sanitazing is because of the previously generated hashes
+        var referrerHash = getMD5(embedUrl);
+
+        /**
+         * Remove defined parameters from embedUrl because they will not be
+         * processed as an actual parameter and will be passed as a part of embed url 
+         */
+        ['resetSmartStyle', 'clearSmartStyle', 'clearInlineStyle'].each(function(key) {
+
+            // Search given string as parameter
+            var regexPattern = new RegExp('&?' + key + '(?:=[0-9]*)?');
+            var matches = regexPattern.exec(embedUrl);
+
+            if(matches && matches[0]) {
+                // Remove the match and add it to actual paramater list
+                embedUrl = embedUrl.replace(matches[0], '');
+
+                // Add the parameter as actual one
+                var keyValue = matches[0].replace('&', '').split('=');
+                params[keyValue[0]] = keyValue[1] !== undefined ? keyValue[1] : '1';
+            }
+        });
+
+        // Delete embed url from params if exists to append into parameters
+        if(params.embedUrl) {
+            delete(params.embedUrl);
+        }
+
+        // Create the url parameters
+        params = Object.toQueryString(params);
+        params += (params !== '' ? '&' : '') + 'embedUrl=' + embedUrl;
+
+        pathname = parser.pathname.split('.css')[0] + '/' + referrerHash + '.css';
+        var nextHref = parser.protocol + '//' + parser.hostname + '/' + pathname + '?' + params;
+        this.loadStyleSheet(nextHref, function() {
+            var inlineStyle = ((styles[referrerHash] || {})['inlineStyle'] || {});
+            if (typeof inlineStyle['embedHeight'] !== 'undefined') {
+                window.parent.postMessage('setHeight:' + inlineStyle['embedHeight'] + ':' + formID, '*');
+            }
+            formCSS.remove();
+        });
+    },
+
+    initOwnerView: function(formID) {
+        if (!this.jsForm) { return; }
+        var url = this.url;
+        if (!this.url.include('.jotform.pro')) {
+            url = 'https://www.jotform.com'
+        }
+        var src = url + '/ownerView.php?id=' + formID;
+        window.parent.postMessage(['loadScript', src, formID].join(':'), '*');
     }
 };
+
+function getMD5(s){function L(k,d){return(k<<d)|(k>>>(32-d))}function K(G,k){var I,d,F,H,x;F=(G&2147483648);H=(k&2147483648);I=(G&1073741824);d=(k&1073741824);x=(G&1073741823)+(k&1073741823);if(I&d){return(x^2147483648^F^H)}if(I|d){if(x&1073741824){return(x^3221225472^F^H)}else{return(x^1073741824^F^H)}}else{return(x^F^H)}}function r(d,F,k){return(d&F)|((~d)&k)}function q(d,F,k){return(d&k)|(F&(~k))}function p(d,F,k){return(d^F^k)}function n(d,F,k){return(F^(d|(~k)))}function u(G,F,aa,Z,k,H,I){G=K(G,K(K(r(F,aa,Z),k),I));return K(L(G,H),F)}function f(G,F,aa,Z,k,H,I){G=K(G,K(K(q(F,aa,Z),k),I));return K(L(G,H),F)}function D(G,F,aa,Z,k,H,I){G=K(G,K(K(p(F,aa,Z),k),I));return K(L(G,H),F)}function t(G,F,aa,Z,k,H,I){G=K(G,K(K(n(F,aa,Z),k),I));return K(L(G,H),F)}function e(G){var Z;var F=G.length;var x=F+8;var k=(x-(x%64))/64;var I=(k+1)*16;var aa=Array(I-1);var d=0;var H=0;while(H<F){Z=(H-(H%4))/4;d=(H%4)*8;aa[Z]=(aa[Z]| (G.charCodeAt(H)<<d));H++}Z=(H-(H%4))/4;d=(H%4)*8;aa[Z]=aa[Z]|(128<<d);aa[I-2]=F<<3;aa[I-1]=F>>>29;return aa}function B(x){var k="",F="",G,d;for(d=0;d<=3;d++){G=(x>>>(d*8))&255;F="0"+G.toString(16);k=k+F.substr(F.length-2,2)}return k}function J(k){k=k.replace(/rn/g,"n");var d="";for(var F=0;F<k.length;F++){var x=k.charCodeAt(F);if(x<128){d+=String.fromCharCode(x)}else{if((x>127)&&(x<2048)){d+=String.fromCharCode((x>>6)|192);d+=String.fromCharCode((x&63)|128)}else{d+=String.fromCharCode((x>>12)|224);d+=String.fromCharCode(((x>>6)&63)|128);d+=String.fromCharCode((x&63)|128)}}}return d}var C=Array();var P,h,E,v,g,Y,X,W,V;var S=7,Q=12,N=17,M=22;var A=5,z=9,y=14,w=20;var o=4,m=11,l=16,j=23;var U=6,T=10,R=15,O=21;s=J(s);C=e(s);Y=1732584193;X=4023233417;W=2562383102;V=271733878;for(P=0;P<C.length;P+=16){h=Y;E=X;v=W;g=V;Y=u(Y,X,W,V,C[P+0],S,3614090360);V=u(V,Y,X,W,C[P+1],Q,3905402710);W=u(W,V,Y,X,C[P+2],N,606105819);X=u(X,W,V,Y,C[P+3],M,3250441966);Y=u(Y,X,W,V,C[P+4],S,4118548399);V=u(V,Y,X,W,C[P+5],Q,1200080426);W=u(W,V,Y,X,C[P+6],N,2821735955);X=u(X,W,V,Y,C[P+7],M,4249261313);Y=u(Y,X,W,V,C[P+8],S,1770035416);V=u(V,Y,X,W,C[P+9],Q,2336552879);W=u(W,V,Y,X,C[P+10],N,4294925233);X=u(X,W,V,Y,C[P+11],M,2304563134);Y=u(Y,X,W,V,C[P+12],S,1804603682);V=u(V,Y,X,W,C[P+13],Q,4254626195);W=u(W,V,Y,X,C[P+14],N,2792965006);X=u(X,W,V,Y,C[P+15],M,1236535329);Y=f(Y,X,W,V,C[P+1],A,4129170786);V=f(V,Y,X,W,C[P+6],z,3225465664);W=f(W,V,Y,X,C[P+11],y,643717713);X=f(X,W,V,Y,C[P+0],w,3921069994);Y=f(Y,X,W,V,C[P+5],A,3593408605);V=f(V,Y,X,W,C[P+10],z,38016083);W=f(W,V,Y,X,C[P+15],y,3634488961);X=f(X,W,V,Y,C[P+4],w,3889429448);Y=f(Y,X,W,V,C[P+9],A,568446438);V=f(V,Y,X,W,C[P+14],z,3275163606);W=f(W,V,Y,X,C[P+3],y,4107603335);X=f(X,W,V,Y,C[P+8],w,1163531501);Y=f(Y,X,W,V,C[P+13],A,2850285829);V=f(V,Y,X,W,C[P+2],z,4243563512);W=f(W,V,Y,X,C[P+7],y,1735328473);X=f(X,W,V,Y,C[P+12],w,2368359562);Y=D(Y,X,W,V,C[P+5],o,4294588738);V=D(V,Y,X,W,C[P+8],m,2272392833);W=D(W,V,Y,X,C[P+11],l,1839030562);X=D(X,W,V,Y,C[P+14],j,4259657740);Y=D(Y,X,W,V,C[P+1],o,2763975236);V=D(V,Y,X,W,C[P+4],m,1272893353);W=D(W,V,Y,X,C[P+7],l,4139469664);X=D(X,W,V,Y,C[P+10],j,3200236656);Y=D(Y,X,W,V,C[P+13],o,681279174);V=D(V,Y,X,W,C[P+0],m,3936430074);W=D(W,V,Y,X,C[P+3],l,3572445317);X=D(X,W,V,Y,C[P+6],j,76029189);Y=D(Y,X,W,V,C[P+9],o,3654602809);V=D(V,Y,X,W,C[P+12],m,3873151461);W=D(W,V,Y,X,C[P+15],l,530742520);X=D(X,W,V,Y,C[P+2],j,3299628645);Y=t(Y,X,W,V,C[P+0],U,4096336452);V=t(V,Y,X,W,C[P+7],T,1126891415);W=t(W,V,Y,X,C[P+14],R,2878612391);X=t(X,W,V,Y,C[P+5],O,4237533241);Y=t(Y,X,W,V,C[P+12],U,1700485571);V=t(V,Y,X,W,C[P+3],T,2399980690);W=t(W,V,Y,X,C[P+10],R,4293915773);X=t(X,W,V,Y,C[P+1],O,2240044497);Y=t(Y,X,W,V,C[P+8],U,1873313359);V=t(V,Y,X,W,C[P+15],T,4264355552);W=t(W,V,Y,X,C[P+6],R,2734768916);X=t(X,W,V,Y,C[P+13],O,1309151649);Y=t(Y,X,W,V,C[P+4],U,4149444226);V=t(V,Y,X,W,C[P+11],T,3174756917);W=t(W,V,Y,X,C[P+2],R,718787259);X=t(X,W,V,Y,C[P+9],O,3951481745);Y=K(Y,h);X=K(X,E);W=K(W,v);V=K(V,g)}var i=B(Y)+B(X)+B(W)+B(V);return i.toLowerCase()};
+
 function getQuerystring(key, default_) {
     if (default_ == null) default_ = "";
     key = key.replace(/[\[]/, "\\\[").replace(/[\]]/, "\\\]");
@@ -11093,7 +12257,7 @@ function onProductImageClicked(index) {
     if (window.getAllProperties && window.getAllProperties().form_products) {
         imageUrls = window.getAllProperties().form_products.map(function(p) { return p.icon }).filter(function(p) { return p });
     } else if (document.querySelectorAll) {
-        imageUrls = Array.prototype.map.call(document.querySelectorAll('span.form-product-item img'), function(p) { return p.src });
+        imageUrls = Array.prototype.map.call(document.querySelectorAll('.form-product-item img'), function(p) { return p.src });
     }
 
     if (!imageUrls || !imageUrls.length) return;
@@ -11124,6 +12288,9 @@ function onProductImageClicked(index) {
     divOverlayContent.appendChild(prevButton);
     divOverlayContent.appendChild(nextButton);
     divOverlayContent.appendChild(closeButton);
+    imageUrls = imageUrls.filter(function(imageUrl) {
+      return !imageUrl.includes("noImage-placeholder.svg");
+    });
 
     var images = imageUrls.map(function(url) {
         var img = document.createElement('img');
@@ -11135,7 +12302,7 @@ function onProductImageClicked(index) {
     // show clicked image
     images[index].style.display = 'block';
 
-    images.forEach(function(p) { divImgWrapper.appendChild(p); });
+    images.each(function(p) { divImgWrapper.appendChild(p); });
 
     var visibleIndex = index;
     var imgLength = images.length;

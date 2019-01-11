@@ -267,6 +267,11 @@ Calendar.setup = function(params)
       calendar.parseDate(calendar.dateField.innerHTML || calendar.dateField.value);
     }
 
+    if (params.startOnMonday) {
+      calendar.startOnMonday = true;
+      calendar.create($(params.parentElement));
+    }
+
     calendar.limits = params.limits;
     if (calendar.limits) {
       calendar.fixCustomLimits();
@@ -274,6 +279,7 @@ Calendar.setup = function(params)
       calendar.update(calendar.date);
       calendar.checkPastAndFuture();
     }
+
 
     calendar.show();
     return calendar;
@@ -809,7 +815,7 @@ Calendar.prototype = {
 
     for (var i = startDay; i <= endDay; ++i) {
       cell = new Element('th').update(Calendar.SHORT_DAY_NAMES[i]);
-      if (i === 0 || i == 6){
+      if (i === startDay || i == endDay){
         cell.addClassName('weekend');          
       }
       row.appendChild(cell);

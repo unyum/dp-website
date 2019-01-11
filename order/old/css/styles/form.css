@@ -44,7 +44,6 @@
     float: left;
     display: inline-block;
     word-wrap: break-word;
-    white-space: pre-wrap;
  }
 
  .form-payment-tax.form-payment-label:after{
@@ -59,7 +58,6 @@
     float: left;
     display: inline-block;
     word-wrap: break-word;
-    white-space: pre-wrap;
  }
 
  .form-payment-shipping.form-payment-label:after {
@@ -74,11 +72,15 @@
     max-width: 325px;
 }
 
-.form-payment-total {
+.form-payment-total, .form-payment-discount{
     max-width: 325px;
     display: block;
     overflow: visible;
     margin: 10px 0;
+}
+
+.form-payment-discount {
+    font-size: 10px;
 }
 
 .form-payment-price {
@@ -1124,7 +1126,9 @@ filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#0064f0', end
 .qq-upload-success:hover .qq-upload-delete{
     display:block;
 }
-
+.qq-upload-fail:hover .qq-upload-delete{
+    display:block;
+}
 
 .qq-upload-drop-area {
     position:absolute; top:0; left:0; width:100%; height:100%; min-height: 54px; z-index:2;
@@ -1719,8 +1723,8 @@ input[type=number]::-webkit-inner-spin-button {
   display: none;
 }
 
-.form-html ul, .form-html ol { list-style: disc outside }
-
+.form-html ul { list-style: disc outside }
+.form-html ol { list-style: decimal }
 
 
 .embed-dropdown {
@@ -1916,6 +1920,20 @@ input[type=number]::-webkit-inner-spin-button {
     padding: 10px 12px;
     font-size: 12px;
   }
+  .form-header-group.hasImage > .header-text { width: auto; }
+}
+
+@media screen and (max-width: 400px) {
+  .formFooter.formFooter-new .formFooter-button{
+    font-size: 11px;
+  }
+}
+
+@media screen and (max-width: 348px) {
+  .formFooter.formFooter-new .formFooter-logoLink {
+    width: 27px;
+    overflow: hidden;
+  }
 }
 
 @media screen and (max-width: 279px) {
@@ -1929,6 +1947,10 @@ input[type=number]::-webkit-inner-spin-button {
     padding: 10px 12px;
     font-size: 12px;
   }
+  .formFooter.formFooter-new .formFooter-button {
+    font-size: 12px;
+  }
+  .form-header-group.hasImage > .header-text { width: auto; }
 }
 
 
@@ -2008,4 +2030,52 @@ input[type=number]::-webkit-inner-spin-button {
   height: 100%;
   border: none;
   background: #FFF;
+}
+
+/* Multi-line question field  */
+
+li[data-type="control_mixed"] .form-input , li[data-type="control_mixed"] .form-input > div {
+    width: 320px;
+}
+
+li[data-type="control_mixed"] .form-sub-label-container {
+    float: left;
+    margin-right: 10px;
+}
+
+li[data-type="control_mixed"] .form-sub-label-container[data-colsize="1"], li[data-type="control_mixed"] .form-sub-label-container input, li[data-type="control_mixed"] .form-sub-label-container select {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+li[data-type="control_mixed"] .form-sub-label-container[data-colsize="2"] {
+    width: 150px;
+}
+
+li[data-type="control_mixed"] .form-sub-label-container[data-colsize="1"] input, li[data-type="control_mixed"] .form-sub-label-container[data-colsize="1"] select {
+    width: 310px;
+}
+
+/* Image choice field */
+
+.jfRadio-label {
+    display: inline-block;
+}
+
+.jfRadio-labelText {
+    margin-top: 5px;
+    display: inline-block;
+}
+
+.jfRadio-image {
+    width: 60px;
+    height: 60px;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.jfRadio-input.form-radio {
+    margin:25px 5px 0 0;
+    position: relative;
 }

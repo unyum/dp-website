@@ -1,7 +1,9 @@
-新
+上傳同步
 D:\SYNC\GitHub\dp-website
 
-舊
-D:\SYNC\GoogleDrive\UpDog\dpsomethingfun
-E:\003_www\dp.somethingfun.tw
+上傳同步-圖床
+D:\SYNC\Dropbox\Apps\updog\somethingfun
+
+本機
+E:\www\dp.somethingfun.tw
 

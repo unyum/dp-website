@@ -635,7 +635,7 @@ Protoplus.ui = {
         }, options || {});
 
         if("JotForm" in window && "url" in JotForm){
-            options.buttonBack = 'url("'+JotForm.url+'images/ball.png") no-repeat scroll 0px 0px transparent';
+            options.buttonBack = 'url("'+JotForm.url+'/images/ball.png") no-repeat scroll 0px 0px transparent';
         }
 
         var valueToPixel = function(value){
@@ -795,7 +795,7 @@ Protoplus.ui = {
 
         // Create an hidden field
 
-        var hidden = new Element('input', {type:'hidden', className: 'form-slider', name:element.name, value:defaultValue, id:element.id});
+        var hidden = new Element('input', {type:'hidden', className: 'form-slider ' + element.className,  name:element.name, value:defaultValue, id:element.id});
         element.parentNode.replaceChild(hidden, element); // replace the hidden with original box
 
         element = hidden;
