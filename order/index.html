@@ -20,8 +20,7 @@ body{margin:0;background-color:#827368;}
 <div id="main_content" style="border:none;">
 
 <!--●●●●●●●以下是unyum●●●●●●●-->
-<!--
-<div id="content" _height="ture">
+
     <iframe
       id="JotFormIFrame-230090402282443"
       title="20130110備份：Auction2018-2"
@@ -53,6 +52,7 @@ body{margin:0;background-color:#827368;}
     window.handleIFrameMessage = function(e) {
       if (typeof e.data === 'object') { return; }
       var args = e.data.split(":");
+      var ifrcontent = document.getElementById("main_content");//●●此行自加●●宣告容器
       if (args.length > 2) { iframe = document.getElementById("JotFormIFrame-" + args[(args.length - 1)]); } else { iframe = document.getElementById("JotFormIFrame"); }
       if (!iframe) { return; }
       switch (args[0]) {
@@ -61,8 +61,11 @@ body{margin:0;background-color:#827368;}
           break;
         case "setHeight":
           iframe.style.height = args[1] + "px";
+			  ifrcontent.style.height = (args[1] - 47) + "px";//●●此行自加●●設定容器高度
           if (!isNaN(args[1]) && parseInt(iframe.style.minHeight) > parseInt(args[1])) {
             iframe.style.minHeight = args[1] + "px";
+            ifrcontent.style.height = (args[1] - 47) + "px";
+
           }
           break;
         case "collapseErrorPage":
@@ -118,11 +121,11 @@ body{margin:0;background-color:#827368;}
       window.attachEvent("onmessage", handleIFrameMessage);
     }
     </script>
-</div>
--->
+
 <!--●●●●●●●以上是unyum●●●●●●●-->
 
 <!--●●●●●●●以下是dpscc●●●●●●●-->
+<!--
     <iframe
       id="JotFormIFrame-200081327222440"
       title="Auction2018-2"
@@ -223,6 +226,7 @@ body{margin:0;background-color:#827368;}
       window.attachEvent("onmessage", handleIFrameMessage);
     }
     </script>
+-->
 <!--●●●●●●●以上是dpscc●●●●●●●-->	
 
 </div>
