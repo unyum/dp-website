@@ -1,0 +1,17 @@
+User-agent: *
+Disallow: /backup/
+Disallow: /backup/*
+Disallow: /*/backup/*
+Disallow: /images/
+Disallow: /images/*
+Disallow: /*/images/*
+Disallow: /css/
+Disallow: /css/*
+Disallow: /*/css/*
+Disallow: /js/
+Disallow: /js/*
+Disallow: /*/js/*
+Disallow: /*.png$
+Disallow: /*.jpg$
+Disallow: /*.gif$
+Sitemap: 
