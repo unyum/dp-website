@@ -12,11 +12,16 @@
 <link rel="shortcut icon" href="https://img2.somethingfun.tw/dp/favicon.ico">
 <style type="text/css">
 html, body{margin:0; padding:0px; background-color:#564b45;}
-#main_content{margin:0 auto;padding:0;background-color:#FFF;overflow:hidden;}
+#main_content{position:absolute; top:0; left:0; width:100%;;background-color:#FFF;}
+#iframe_wrapper{overflow:hidden; position: relative;}
 </style>
 <title>工商省長 ≡ 傳檔填單</title>
 </head>
 <body>
+
+
+
+<div id="iframe_wrapper" style="overflow:hidden;">
 <div id="main_content" style="border:none;">
 
 <!--●●●●●●●unyum●●●●●●●-->
@@ -29,7 +34,7 @@ html, body{margin:0; padding:0px; background-color:#564b45;}
       allow="geolocation; microphone; camera; fullscreen; payment"
       src="https://form.jotform.com/262580166546462"
       frameborder="0"
-      style="min-width:100%;max-width:100%;height:539px;border:none;"
+      style="min-width:100%;max-width:100%;height:100%;border:none;"
       scrolling="no"
     >
     </iframe>
@@ -51,7 +56,7 @@ html, body{margin:0; padding:0px; background-color:#564b45;}
     window.handleIFrameMessage = function(e) {
       if (typeof e.data === 'object') { return; }
       var args = e.data.split(":");
-      var ifrcontent = document.getElementById("main_content");//●●此行自加●●宣告容器
+      var ifrcontent = document.getElementById("iframe_wrapper");//●●此行自加●●宣告容器
       if (args.length > 2) { iframe = document.getElementById("JotFormIFrame-" + args[(args.length - 1)]); } else { iframe = document.getElementById("JotFormIFrame"); }
       if (!iframe) { return; }
       switch (args[0]) {
@@ -120,9 +125,11 @@ html, body{margin:0; padding:0px; background-color:#564b45;}
       window.attachEvent("onmessage", handleIFrameMessage);
     }
     </script>
-	
+
 <div style="position: absolute; bottom: 0; left: 0; width: 100%; height: 65px; background-color: #564b45; pointer-events: none; z-index: 9999;"></div>
 <!--●●●●●●●unyum●●●●●●●-->
+</div>
+
 </div>
 </body>
 </html>
