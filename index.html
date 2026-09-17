@@ -1,16 +1,15 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<!--●●●●●●●以下是清除快取●●●●●●●-->
+<!--●●●●●●●以下是清除快取●●●●●●●-->
 <meta http-equiv="cache-control" content="no-cache" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="-1" />
 <meta http-equiv="content-type" content="no-cache, must-revalidate" />
 <!--●●●●●●●以上是清除快取●●●●●●●-->
 <link rel="shortcut icon" href="https://img2.somethingfun.tw/dp/favicon.ico">
-
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>工商省長 ≡ 數位印刷 ≡ 服務導引</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <style>
@@ -19,12 +18,12 @@
         }
     </style>
 </head>
-<body class="bg-taupe-600 text-white antialiased">
-<div class="max-w-lg mx-auto min-h-screen px-6 py-10 flex flex-col justify-between">
+<body class="bg-taupe-500 text-white antialiased">
+<div class="max-w-lg mx-auto min-h-screen px-3 py-10 flex flex-col justify-between">
 
     <div>
-        <div class="flex items-center space-x-4 mb-8 border-b-2 border-taupe-500 pb-6">
-            <div class="w-20 h-20 rounded-full overflow-hidden shrink-0  flex items-center justify-center shadow-md">
+        <div class="flex items-center space-x-4 mb-6 pb-0">
+            <div class="w-18 h-18 rounded-full overflow-hidden shrink-0  flex items-center justify-center shadow-md">
                 <img src="https://dp.somethingfun.tw/images/logo.png" alt="工商省長 LOGO" class="w-full h-full object-cover" onerror="this.style.display='none'; this.parentNode.innerHTML='<span class=\'text-3xl\'>👍</span>'">
             </div>
             <div>
@@ -33,14 +32,14 @@
             </div>
         </div>
 
-        <div class="bg-taupe-700 p-6 rounded-2xl border border-taupe-700 mb-8 shadow-md">
+        <div class="bg-taupe-600 p-6 rounded-2xl border border-taupe-700 mb-8 shadow-md">
             <h3 class="font-bold text-amber-200 text-lg mb-5 flex items-center">
                 <span class="mr-2 text-xl">🚀</span> 訂購簡易三步驟：
             </h3>
-            <div class="space-y-6 text-base text-gray-100 leading-relaxed">
+            <div class="pl-9 space-y-6 text-base text-gray-100 leading-relaxed">
                 <div>
                     <h4 class="font-bold text-amber-200 text-lg">1️⃣ 填單</h4>
-                    <p class="text-sm text-taupe-200 pl-7 mt-1">勾選需要印刷的項目、<br>上傳檔案、<br>留下 Email 信箱與手機，<b>約 3 分鐘完成。</b></p>
+                    <p class="text-sm text-taupe-200 pl-7 mt-1">勾選要印的項目、上傳檔案、留下 Email 與手機，<br><b class="text-orange-200">約 3 分鐘完成。</b></p>
                 </div>
                 <div>
                     <h4 class="font-bold text-amber-200 text-lg">2️⃣ 校稿</h4>
@@ -51,38 +50,64 @@
                     <p class="text-sm text-taupe-200 pl-7 mt-1">同時請您確認「價格」與「時程」，<br>如果都沒問題，結帳後就可送印。</p>
                 </div>
             </div>
-        </div>
 
-        <div class="mb-8">
+        <div class="mt-8">
+            <!--
             <div class="text-lg font-bold text-white mb-3 flex items-center">
                 <span class="mr-2 text-xl">📋</span> 填單只要 3 分鐘：
             </div>
-            <a href="https://dp.somethingfun.tw/order" target="_blank" class="block w-full py-5 bg-amber-200 hover:bg-amber-300 text-taupe-800 text-center font-extrabold text-xl rounded-2xl shadow-xl transition duration-200 tracking-wider">💡 點我填單 👆</a>
-            <p class="text-sm text-red-300 text-center mt-3 font-semibold tracking-wide">🔔 填單後，我們會在半個工作天內回覆，請留意收信。</p>
+			-->
+            <a href="https://dp.somethingfun.tw/order" target="_blank" class="block w-[calc(100%-2rem)] mx-auto py-5 bg-amber-300 hover:bg-amber-400 text-taupe-800 text-center font-extrabold text-xl rounded-2xl shadow-xl transition duration-200 tracking-wider">📋 點我填單 👆👆</a>
+            <p class="text-sm text-red-300 text-center mt-3 font-semibold tracking-wide">🔔 填單後，我們會在半個工作天內回覆，請留意收信</p>
+        </div>
         </div>
 
-        <div class="bg-taupe-700 p-6 rounded-2xl border border-taupe-700 mb-8 shadow-md">
+        <div class="bg-taupe-600 p-6 rounded-2xl border border-taupe-700 mb-8 shadow-md">
             <h3 class="font-bold text-white text-base mb-4 flex items-center">
                 <span class="mr-2 text-xl">💬</span> 聯絡我們
             </h3>
             
             <div class="mb-4 text-base">
-                <span class="text-taupe-200">電子郵件：</span>
+                <span class="text-taupe-200">💌️ 電子郵件：</span>
                 <a href="mailto:dp@somethingfun.tw" class="text-amber-200 break-all">dp@somethingfun.tw</a>
+				<button onclick="copyTextToClipboard('dp@somethingfun.tw')" class="px-2 py-1 bg-taupe-300 hover:bg-white text-taupe-700 text-xs font-bold rounded-lg shadow transition duration-200 cursor-pointer shrink-0 ml-2">複製 Email</button>
+				<script>
+				function copyTextToClipboard(text) {
+				// 使用現代瀏覽器專屬的 Clipboard API
+				navigator.clipboard.writeText(text).then(function() {
+				// 複製成功時的反應（你可以改成跳出提示、或者改變按鈕文字）
+				alert('複製成功！');
+				}).catch(function(err) {
+				// 失敗時的備用防護
+				console.error('無法複製文字: ', err);
+				alert('複製失敗，請手動複製。');    });}
+				</script>
             </div>
-
+            <div class="mb-4 text-base">
+                <span class="text-taupe-200">📄&nbsp;&nbsp;表單聯繫：</span>
+            </div>
             <div class="grid grid-cols-2 gap-4 my-5">
-                <a href="https://dpscc.page.link/qu" target="_blank" class="bg-taupe-200 hover:bg-amber-300 p-4 rounded-xl border border-taupe-700 transition shadow-sm text-center">
-                    <span class="text-sm text-taupe-700 block font-bold">詢價估價 🧾</span>
-                    <span class="text-xs text-taupe-600 block mt-1">未列出印製品</span>
+                <a href="https://dpscc.page.link/qu" target="_blank" class="bg-orange-300 hover:bg-orange-100 p-4 rounded-xl border border-taupe-700 transition shadow-sm text-center">
+                    <span class="text-base text-taupe-700 block font-bold">詢價估價 🧾</span>
+                    <span class="text-sm text-taupe-600 block mt-1">詢問價目表未列出的印製品</span>
                 </a>
-                <a href="https://dpscc.page.link/ot" target="_blank" class="bg-taupe-200 hover:bg-amber-300 p-4 rounded-xl border border-taupe-700 transition shadow-sm text-center">
-                    <span class="text-sm text-taupe-700 block font-bold">進度查詢 🔍</span>
-                    <span class="text-xs text-taupe-600 block mt-1">訂單進度追蹤</span>
+                <a href="https://dpscc.page.link/ot" target="_blank" class="bg-orange-300 hover:bg-orange-100 p-4 rounded-xl border border-taupe-700 transition shadow-sm text-center">
+                    <span class="text-base text-taupe-700 block font-bold">進度查詢 🔍</span>
+                    <span class="text-sm text-taupe-600 block mt-1">已填單，要追蹤訂單進度</span>
                 </a>
             </div>
-
-            <p class="text-sm text-red-300 font-semibold text-center tracking-wide">🔔 所有來信、詢價或印件查詢，我們會在半個工作天內回覆</p>
+            <p class="mb-4 text-sm text-red-300 font-semibold text-left tracking-wide">🔔 所有來信、詢價或印件查詢，我們會在半個工作天內回覆</p>
+			<hr class="my-5 border-t border-taupe-500">
+            <div class="mb-4 text-base">
+                <span class="text-taupe-200">🤙 手機號碼：<a href="tel:0986235875" class="text-white break-all text-lg" style="letter-spacing:1px;">0986235875</a>
+				<br>　 <span class="text-xs">🟤 常常電話說不清楚，建議用上列 Email 或表單最方便。</span>
+				</span>
+            </div>
+            <div class="text-base">
+                <span class="text-taupe-200">&nbsp;📍&nbsp;面交自取：<a href="https://maps.app.goo.gl/bVpD7ozUBoiqFbCq6" class="text-white break-all">高雄市三民區民族一路80號</a>
+				<br>　 <span class="text-xs">🟤 現場僅供面交自取服務，訂購請透過線上填單，感謝。</span>
+				</span>
+            </div>
         </div>
 
         <div class="space-y-4 mb-10">
@@ -138,8 +163,8 @@
                 <span class="text-xl transition group-hover:translate-x-1.5">👆</span>
             </a>
 			
-    <div class="text-center text-xs text-taupe-200 py-6 mt-10 border-t border-taupe-500">
-        © 2026 工商省長. 版權所有.
+    <div class="text-center text-xs tracking-wide text-taupe-200 py-6 mt-10 border-t border-taupe-600">
+        © 2026 工商省長．版權所有
     </div>
 </div>
 
